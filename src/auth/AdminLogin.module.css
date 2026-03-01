@@ -1,70 +1,147 @@
 /* AdminLogin.module.css */
 
-/* --- Container (Full Screen Background) --- */
+/* --- 1. Core Container & Background --- */
 .container {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
   width: 100%;
-  background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+  background-color: #121212; /* Deep industrial gray/black */
+  position: relative;
   padding: 20px;
   box-sizing: border-box;
+  font-family: "Inter", system-ui, sans-serif;
+  overflow: hidden;
 }
 
-/* --- Login Card --- */
+/* Diagonal milling/carbon fiber texture */
+.millingPattern {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(255, 255, 255, 0.02),
+    rgba(255, 255, 255, 0.02) 2px,
+    transparent 2px,
+    transparent 8px
+  );
+  z-index: 0;
+}
+
+/* --- 2. The Heavy-Duty Card (Machine Vise Seating) --- */
 .card {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  padding: 40px;
+  position: relative;
+  z-index: 1;
+  background: #1e1e20; /* Powder-coated dark metal look */
+  padding: 48px 40px;
   width: 100%;
-  max-width: 400px;
-  border-radius: 16px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-  
-  /* Entry Animation */
+  max-width: 420px;
+  border-radius: 4px;
+  border: 1px solid #333;
+  border-top: 4px solid #f5a623; /* TiN Coating / Carbide Gold Top Accent */
+  box-shadow:
+    0 20px 40px rgba(0, 0, 0, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
   opacity: 0;
-  transform: translateY(20px);
-  animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform: translateY(-20px);
 }
 
-@keyframes slideUpFade {
-  to {
+.card.cardVisible {
+  /* Mimics a heavy workpiece being locked into a CNC fixture */
+  animation: heavySeat 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+@keyframes heavySeat {
+  0% {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+  80% {
+    transform: translateY(2px);
+  } /* Slight rigid overtravel */
+  100% {
     opacity: 1;
     transform: translateY(0);
-  }
+  } /* Locks into place */
 }
 
-/* --- Header Section --- */
+/* --- 3. Header & Branding --- */
 .header {
-  text-align: center;
-  margin-bottom: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 36px;
 }
 
-.title {
-  font-size: 26px;
+.logoWrapper {
+  background: #121212;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #333;
+  margin-bottom: 16px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.logo {
+  height: 48px;
+  width: auto;
+  object-fit: contain;
+}
+
+.companyName {
+  font-size: 24px;
   font-weight: 800;
-  color: #111827;
-  margin: 0 0 8px 0;
+  color: #ffffff;
+  letter-spacing: 2px;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+/* Subtly machined divider */
+.divider {
+  width: 40px;
+  height: 2px;
+  background: #f5a623;
+  margin: 12px 0;
 }
 
 .subtitle {
-  color: #6b7280;
-  font-size: 14px;
+  color: #8b949e;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
   margin: 0;
 }
 
-/* --- Form Elements --- */
+/* --- 4. Form Elements & Assembly Animations --- */
 .formGroup {
-  margin-bottom: 20px;
-  position: relative;
+  margin-bottom: 24px;
+  opacity: 0;
+  /* Inputs load in like parts feeding into a machine */
+  animation: mechanicalSlide 0.4s forwards cubic-bezier(0.8, 0, 0.2, 1);
+}
+
+@keyframes mechanicalSlide {
+  from {
+    opacity: 0;
+    transform: translateX(-15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .label {
   display: block;
   font-size: 13px;
   font-weight: 600;
-  color: #374151;
+  color: #a1a1aa;
   margin-bottom: 8px;
 }
 
@@ -76,93 +153,159 @@
 
 .icon {
   position: absolute;
-  left: 12px;
-  color: #9ca3af;
+  left: 14px;
+  color: #52525b;
   pointer-events: none;
+  transition: color 0.3s ease;
+  z-index: 2;
 }
 
+/* Inset milled slots for inputs */
 .input {
   width: 100%;
-  padding: 12px 12px 12px 40px; /* Space for icon */
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 14px;
-  transition: all 0.2s ease;
+  padding: 14px 14px 14px 44px;
+  background: #121212;
+  border: 1px solid #27272a;
+  border-radius: 4px;
+  font-size: 15px;
+  color: #f4f4f5;
+  transition:
+    background 0.2s ease,
+    box-shadow 0.2s ease;
   box-sizing: border-box;
-  background: #f9fafb;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.input::placeholder {
+  color: #3f3f46;
 }
 
 .input:focus {
   outline: none;
-  border-color: #F59E0B;
-  background: #fff;
-  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.1);
+  background: #000000;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8);
+  border-color: transparent;
 }
 
-/* --- Button --- */
+.input:focus + .icon,
+.inputWrapper:focus-within .icon {
+  color: #f5a623;
+}
+
+/* --- 5. The CNC Toolpath Line --- */
+.toolpath {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  width: 0;
+  background-color: #f5a623;
+  /* Cubic bezier mimics a machine accelerating and decelerating for a cut */
+  transition: width 0.5s cubic-bezier(0.65, 0, 0.35, 1);
+  z-index: 3;
+}
+
+.input:focus ~ .toolpath {
+  width: 100%;
+}
+
+/* --- 6. Solid Industrial Button & Spindle Startup --- */
 .button {
   width: 100%;
-  padding: 12px;
-  background: #F59E0B;
-  color: white;
+  padding: 14px;
+  background: #f5a623; /* Carbide Gold / Warning Orange */
+  color: #121212; /* Dark text for high contrast */
   border: none;
-  border-radius: 8px;
+  border-radius: 4px;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
   cursor: pointer;
-  transition: background 0.2s, transform 0.1s;
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-top: 10px;
+  gap: 10px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  /* Sharp, rigid transitions */
+  transition:
+    background 0.1s linear,
+    transform 0.1s linear,
+    box-shadow 0.1s linear;
 }
 
-.button:hover {
-  background: #d97706;
+.button:hover:not(:disabled) {
+  background: #f5b94f;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 12px rgba(245, 166, 35, 0.2);
 }
 
-.button:active {
-  transform: scale(0.98);
+.button:active:not(:disabled) {
+  transform: translateY(2px); /* Physical tactile push */
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 
 .button:disabled {
-  opacity: 0.7;
+  opacity: 0.6;
   cursor: not-allowed;
-  transform: none;
+  background: #52525b;
+  color: #a1a1aa;
 }
 
-/* --- Error Message --- */
+.btnIcon {
+  transition: transform 0.2s cubic-bezier(0.8, 0, 0.2, 1);
+}
+
+.button:hover:not(:disabled) .btnIcon {
+  transform: translateX(4px); /* Mechanical slide forward on hover */
+}
+
+/* High-speed spindle rotation for loading state */
+.spindleSpin {
+  animation: spindleStart 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes spindleStart {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- 7. Hardware Fault Error Box --- */
 .error {
-  background-color: #fef2f2;
-  border: 1px solid #fee2e2;
-  color: #ef4444;
-  padding: 10px;
-  border-radius: 8px;
+  background-color: #1a0505;
+  border: 1px solid #7f1d1d;
+  color: #f87171;
+  padding: 12px 16px;
+  border-radius: 4px;
   font-size: 13px;
-  margin-top: 20px;
+  font-weight: 600;
+  margin-top: 24px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  
-  /* Error Shake Animation */
-  animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+  gap: 10px;
+  border-left: 4px solid #ef4444;
 }
 
-@keyframes shake {
-  10%, 90% { transform: translate3d(-1px, 0, 0); }
-  20%, 80% { transform: translate3d(2px, 0, 0); }
-  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-  40%, 60% { transform: translate3d(4px, 0, 0); }
+.errorPulse {
+  animation: faultFlash 1s infinite alternate;
 }
 
-/* --- Mobile Responsive --- */
+@keyframes faultFlash {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* --- 8. Mobile Responsive --- */
 @media (max-width: 480px) {
   .card {
-    padding: 30px 20px;
-    box-shadow: none; /* Flatter look on mobile */
-  }
-  
-  .title {
-    font-size: 22px;
+    padding: 32px 24px;
   }
 }

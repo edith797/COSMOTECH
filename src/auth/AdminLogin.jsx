@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
-import { Mail, Lock, AlertCircle, Loader2, ShieldCheck } from "lucide-react";
+import { Mail, Lock, AlertOctagon, Settings, ArrowRight } from "lucide-react";
 import styles from "./AdminLogin.module.css";
 
 export default function AdminLogin() {
@@ -9,7 +9,13 @@ export default function AdminLogin() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const navigate = useNavigate();
+
+  // Triggers the "system boot" mechanical sequence
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -17,37 +23,28 @@ export default function AdminLogin() {
     setLoading(true);
 
     try {
-      // 1. Authenticate with Supabase Auth
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { data, error: signInError } =
+        await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
 
       if (signInError) throw signInError;
 
-      const userId = data.user.id;
-
-      // 2. Fetch role from profiles table
-      // Using maybeSingle() to avoid 406 errors if the profile row doesn't exist yet
       const { data: profile } = await supabase
         .from("profiles")
         .select("role")
-        .eq("id", userId)
+        .eq("id", data.user.id)
         .maybeSingle();
 
-      // 3. Logic: Redirect based on role
       if (profile?.role === "ADMIN") {
         navigate("/admin/dashboard");
       } else {
-        // If they are a USER (or if profile is null/missing), send to user dashboard.
-        // Your useAuthInit hook will handle creating the profile row if it's missing.
         navigate("/user/dashboard");
       }
-
     } catch (err) {
-      // If the login failed (e.g. wrong password), sign out and show error
       await supabase.auth.signOut();
-      setError(err.message || "An unexpected error occurred.");
+      setError(err.message || "Access denied. Check credentials.");
     } finally {
       setLoading(false);
     }
@@ -55,39 +52,47 @@ export default function AdminLogin() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.card}>
-        
-        {/* Header */}
+      <div className={styles.millingPattern}></div>
+
+      {/* The card seats heavily into place like a metal part in a vise */}
+      <div className={`${styles.card} ${mounted ? styles.cardVisible : ""}`}>
         <div className={styles.header}>
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
-            <div style={{ padding: '10px', background: '#fff7ed', borderRadius: '50%', color: '#F59E0B' }}>
-               <ShieldCheck size={32} />
-            </div>
+          <div className={styles.logoWrapper}>
+            <img
+              src="/company-logo.png"
+              alt="Cosmotech Logo"
+              className={styles.logo}
+              onError={(e) => {
+                e.target.style.display = "none";
+              }}
+            />
           </div>
-          <h2 className={styles.title}>Portal Login</h2>
-          <p className={styles.subtitle}>Sign in to access your dashboard</p>
+          <h1 className={styles.companyName}>COSMOTECH</h1>
+          <div className={styles.divider}></div>
+          <p className={styles.subtitle}>PRECISION TOOLING PORTAL</p>
         </div>
 
-        {/* Login Form */}
-        <form onSubmit={handleLogin}>
-          
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Email Address</label>
+        <form onSubmit={handleLogin} className={styles.form}>
+          {/* Staggered mechanical drop-in */}
+          <div className={styles.formGroup} style={{ animationDelay: "0.15s" }}>
+            <label className={styles.label}>Authorized Email</label>
             <div className={styles.inputWrapper}>
               <Mail size={18} className={styles.icon} />
               <input
                 type="email"
-                placeholder="user@company.com"
+                placeholder="user@cosmotech.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className={styles.input}
               />
+              {/* CNC Toolpath Animation Element */}
+              <span className={styles.toolpath}></span>
             </div>
           </div>
 
-          <div className={styles.formGroup}>
-            <label className={styles.label}>Password</label>
+          <div className={styles.formGroup} style={{ animationDelay: "0.3s" }}>
+            <label className={styles.label}>Security Key</label>
             <div className={styles.inputWrapper}>
               <Lock size={18} className={styles.icon} />
               <input
@@ -98,35 +103,38 @@ export default function AdminLogin() {
                 required
                 className={styles.input}
               />
+              {/* CNC Toolpath Animation Element */}
+              <span className={styles.toolpath}></span>
             </div>
           </div>
 
-          <button type="submit" className={styles.button} disabled={loading}>
-            {loading ? (
-              <>
-                <Loader2 size={18} className="spin-anim" style={{ marginRight: '8px', animation: 'spin 1s linear infinite' }} />
-                Verifying...
-              </>
-            ) : (
-              "Login Securely"
-            )}
-          </button>
-
+          <div
+            className={styles.formGroup}
+            style={{ animationDelay: "0.45s", marginTop: "32px" }}
+          >
+            <button type="submit" className={styles.button} disabled={loading}>
+              {loading ? (
+                <>
+                  <Settings size={18} className={styles.spindleSpin} />
+                  ...
+                </>
+              ) : (
+                <>
+                  LOGIN
+                  <ArrowRight size={18} className={styles.btnIcon} />
+                </>
+              )}
+            </button>
+          </div>
         </form>
 
-        {/* Error Display */}
         {error && (
           <div className={styles.error}>
-            <AlertCircle size={18} />
+            <AlertOctagon size={18} className={styles.errorPulse} />
             <span>{error}</span>
           </div>
         )}
       </div>
-
-      {/* Inline style for spinner */}
-      <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
     </div>
   );
 }

@@ -10,7 +10,9 @@ export default function ProtectedRoute({ children, allowedRoles }) {
   useEffect(() => {
     async function checkAuth() {
       // 1. Check if user is logged into Supabase
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
 
       if (!user) {
         setIsAuthenticated(false);
@@ -45,11 +47,8 @@ export default function ProtectedRoute({ children, allowedRoles }) {
   }, [allowedRoles]);
 
   if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '50px' }}>
-        <h2>Checking Security Clearance... 🛡️</h2>
-      </div>
-    );
+    // ✅ Returns absolutely nothing, keeping the transition silent and instant
+    return null;
   }
 
   // If not logged in, send to login page (change "/" to your login route if different)

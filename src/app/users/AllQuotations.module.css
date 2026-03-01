@@ -1,0 +1,296 @@
+/* --- Page Layout --- */
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto 80px auto; /* Added bottom padding for scroll clearance */
+  padding: 32px 20px;
+  box-sizing: border-box;
+  font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 800;
+  color: #0f172a; /* Deep Gunmetal */
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.subtitle {
+  color: #64748b; /* Soft Slate */
+  margin: 6px 0 0 0;
+  font-size: 14px;
+}
+
+/* --- Actions Bar (Search + Filter) --- */
+.actionsBar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.searchWrapper {
+  position: relative;
+  flex: 1;
+  min-width: 250px;
+  max-width: 400px;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+}
+
+.searchInput {
+  width: 100%;
+  height: 44px; /* Standardized premium height */
+  padding: 10px 14px 10px 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #0f172a;
+  background-color: #ffffff;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #f59e0b; /* Amber Focus */
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+}
+
+/* --- Filter Dropdown --- */
+.filterWrapper {
+  position: relative;
+  min-width: 200px;
+}
+
+.filterIcon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.filterSelect {
+  width: 100%;
+  height: 44px;
+  padding: 10px 36px 10px 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  background-color: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  transition: all 0.2s ease;
+}
+
+.filterSelect:focus {
+  outline: none;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+}
+
+/* --- Create Button --- */
+.createButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(
+    145deg,
+    #f59e0b 0%,
+    #d97706 100%
+  ); /* Premium Amber Gradient */
+  color: #ffffff;
+  border: none;
+  padding: 0 24px;
+  height: 44px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.25);
+  transition: all 0.2s ease;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.createButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 8px -1px rgba(245, 158, 11, 0.35);
+}
+
+.createButton:active {
+  transform: translateY(0);
+}
+
+/* --- Table Styles --- */
+.tableContainer {
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.05),
+    0 8px 10px -6px rgba(0, 0, 0, 0.01);
+  overflow-x: auto; /* Keeps it responsive on mobile */
+  border: 1px solid #e2e8f0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  min-width: 800px; /* Prevents text crunching on small screens */
+}
+
+.th {
+  padding: 16px 20px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background-color: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.tr {
+  border-bottom: 1px solid #f1f5f9;
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+}
+
+.tr:hover {
+  background-color: #f8fafc;
+}
+
+.tr:last-child .td {
+  border-bottom: none;
+}
+
+.td {
+  padding: 16px 20px;
+  font-size: 14px;
+  color: #1e293b;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* --- Cell Content --- */
+.cellContent {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.iconCircle {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background-color: #f8fafc; /* Subtle slate background */
+  border: 1px solid #e2e8f0;
+  color: #475569; /* Gunmetal icon */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.companyName {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.amount {
+  font-weight: 700;
+  color: #0f172a; /* Replaced flat green with bold premium dark slate */
+}
+
+.dateText {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 80px 20px;
+  color: #64748b;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.emptyStateIcon {
+  margin-bottom: 16px;
+  color: #cbd5e1;
+}
+
+/* --- Action / View Button inside Table --- */
+.viewBtn {
+  padding: 8px;
+  color: #94a3b8;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tr:hover .viewBtn {
+  color: #0f172a; /* Deep Gunmetal on hover instead of blue */
+  background-color: #e2e8f0;
+}
+
+/* =========================================
+   ✅ MOBILE RESPONSIVENESS
+   ========================================= */
+@media (max-width: 768px) {
+  .container {
+    padding: 20px 15px;
+  }
+
+  .actionsBar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .searchWrapper,
+  .filterWrapper {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .createButton {
+    width: 100%;
+    margin-left: 0;
+    margin-top: 4px;
+  }
+
+  .title {
+    font-size: 24px;
+  }
+}

@@ -1,0 +1,282 @@
+/* =========================================
+   1. PAGE LAYOUT
+   ========================================= */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 32px 20px 80px 20px;
+  font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.header {
+  margin-bottom: 24px;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 800;
+  color: #0f172a; /* Deep Gunmetal */
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.subtitle {
+  color: #64748b;
+  margin: 6px 0 0 0;
+  font-size: 14px;
+}
+
+/* =========================================
+   2. FORM CARD (Add Employee)
+   ========================================= */
+.formCard {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px 28px;
+  margin-bottom: 32px;
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.05),
+    0 8px 10px -6px rgba(0, 0, 0, 0.01);
+}
+
+.cardTitle {
+  margin: 0 0 20px 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* --- Form Grid (Responsive) --- */
+.formGrid {
+  display: grid;
+  /* Desktop: 3 inputs + 1 button in a row */
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 16px;
+  align-items: center;
+}
+
+.inputWrapper {
+  position: relative;
+  width: 100%;
+}
+
+.icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+}
+
+.input {
+  width: 100%;
+  height: 44px;
+  padding: 10px 14px 10px 42px; /* Space for icon */
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #0f172a;
+  background-color: #ffffff;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #f59e0b; /* Amber Focus */
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+}
+
+.addButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(
+    145deg,
+    #f59e0b 0%,
+    #d97706 100%
+  ); /* Premium Amber Gradient */
+  color: #ffffff;
+  border: none;
+  padding: 0 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  height: 44px; /* Matches input height */
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.25);
+}
+
+.addButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 8px -1px rgba(245, 158, 11, 0.35);
+}
+
+.addButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* =========================================
+   3. TABLE SECTION
+   ========================================= */
+.tableCard {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.05),
+    0 8px 10px -6px rgba(0, 0, 0, 0.01);
+}
+
+.tableContainer {
+  overflow-x: auto; /* Allows scrolling on mobile */
+  width: 100%;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 700px; /* Prevents squashing */
+}
+
+.table th {
+  background-color: #f8fafc;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: left;
+  padding: 16px 20px;
+  border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 14px;
+  color: #1e293b;
+  vertical-align: middle;
+}
+
+.table tr {
+  transition: background-color 0.15s ease;
+}
+
+.table tr:hover {
+  background-color: #f8fafc;
+}
+
+.table tr:last-child td {
+  border-bottom: none;
+}
+
+/* --- Table Cell Styles --- */
+.nameCell {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background-color: #f1f5f9; /* Slate tint */
+  color: #0f172a; /* Gunmetal text */
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.muted {
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* --- Badges --- */
+.badgeActive {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #10b981;
+  background-color: #10b98115; /* Transparent Emerald */
+  border: 1px solid #10b98140;
+}
+
+.badgePending {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #d97706;
+  background-color: #f59e0b15; /* Transparent Amber */
+  border: 1px solid #f59e0b40;
+}
+
+/* --- States --- */
+.emptyState {
+  text-align: center;
+  padding: 60px 20px;
+  color: #64748b;
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.loadingState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+}
+
+.loadingText {
+  margin-top: 12px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+/* =========================================
+   ✅ MOBILE RESPONSIVENESS
+   ========================================= */
+@media (max-width: 768px) {
+  .container {
+    padding: 20px 15px;
+  }
+
+  .formCard {
+    padding: 20px 16px;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr; /* Stack inputs vertically */
+    gap: 16px;
+  }
+
+  .addButton {
+    width: 100%;
+    margin-top: 8px;
+  }
+}

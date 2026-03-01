@@ -1,0 +1,47 @@
+/* src/app/admin/AdminLayout.css */
+
+.admin-layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  /* Apply your new professional font globally to the layout */
+  font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.sidebar-wrapper {
+  transition: width 0.3s ease-in-out;
+  flex-shrink: 0;
+  height: 100%;
+}
+
+/* Desktop Widths */
+.sidebar-wrapper.open {
+  width: 240px;
+}
+
+.sidebar-wrapper.closed {
+  width: 70px;
+}
+
+.main-content {
+  flex: 1;
+  padding: 32px; /* A bit more breathing room for a premium feel */
+  background-color: #f1f5f9; /* ✅ Clean, light Slate background instead of muddy grey */
+  overflow-y: auto;
+  color: #2e3e63; /* Dark slate text for high readability */
+}
+
+/* ✅ CRITICAL FIX FOR MOBILE */
+@media (max-width: 768px) {
+  .sidebar-wrapper,
+  .sidebar-wrapper.open,
+  .sidebar-wrapper.closed {
+    width: 0 !important; /* Wrapper takes NO space on mobile */
+  }
+
+  .main-content {
+    padding: 20px; /* Adjusted padding for mobile screens */
+    /* Ensure content isn't hidden under the floating mobile hamburger menu */
+    padding-top: 60px;
+  }
+}

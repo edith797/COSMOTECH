@@ -1,0 +1,287 @@
+/* =========================================
+   1. PAGE LAYOUT
+   ========================================= */
+.container {
+  width: 100%;
+  max-width: 1300px;
+  margin: 0 auto 80px auto;
+  padding: 20px;
+  box-sizing: border-box;
+  font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 800;
+  color: #0f172a; /* Deep Gunmetal */
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.subtitle {
+  color: #64748b;
+  margin: 5px 0 0 0;
+  font-size: 14px;
+}
+
+/* =========================================
+   2. ACTIONS BAR (Search, Filter, Create)
+   ========================================= */
+.actionsBar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.searchWrapper {
+  position: relative;
+  flex: 1;
+  min-width: 250px;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 10px 10px 10px 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #0f172a;
+  background: #ffffff;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+  height: 44px;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15); /* Amber focus ring */
+}
+
+.filterWrapper {
+  position: relative;
+  min-width: 200px;
+  flex-grow: 1;
+}
+
+.filterIcon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.filterSelect {
+  width: 100%;
+  padding: 10px 36px 10px 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  background-color: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.75rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  height: 44px;
+  transition: all 0.2s ease;
+}
+
+.filterSelect:focus {
+  outline: none;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+}
+
+.createButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    145deg,
+    #f59e0b 0%,
+    #d97706 100%
+  ); /* Premium Amber Gradient */
+  color: #fff;
+  border: none;
+  padding: 0 24px;
+  height: 44px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.25);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.createButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 8px -1px rgba(245, 158, 11, 0.35);
+}
+
+/* =========================================
+   3. RESPONSIVE TABLE
+   ========================================= */
+.tableContainer {
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.05),
+    0 8px 10px -6px rgba(0, 0, 0, 0.01);
+  border: 1px solid #e2e8f0;
+  overflow-x: auto;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  min-width: 900px;
+}
+
+.th {
+  padding: 16px 20px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background-color: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.tr {
+  border-bottom: 1px solid #f1f5f9;
+  transition: background-color 0.15s ease;
+  cursor: pointer;
+}
+
+.tr:hover {
+  background-color: #f8fafc;
+}
+
+.td {
+  padding: 16px 20px;
+  font-size: 14px;
+  color: #1e293b;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.table tr:last-child .td {
+  border-bottom: none;
+}
+
+/* =========================================
+   4. ACTION BUTTONS (Edit / Delete)
+   ========================================= */
+.actionsCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.actionBtn {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+/* Edit Button Hover (Gunmetal instead of Blue) */
+.actionBtn:hover:has(svg[color="#475569"]) {
+  background-color: #f1f5f9;
+  border-color: #e2e8f0;
+}
+.actionBtn:hover:has(svg[color="#475569"]) svg {
+  color: #0f172a !important;
+}
+
+/* Delete Button Specifics */
+.actionBtn:hover:has(svg[color="#ef4444"]) {
+  background-color: #fef2f2;
+  border-color: #fecaca;
+}
+
+/* Fallback if :has isn't supported */
+.actionBtn:hover {
+  background-color: #f1f5f9;
+}
+
+/* =========================================
+   5. UTILS
+   ========================================= */
+.cellContent {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 80px 20px;
+  color: #64748b;
+  font-weight: 500;
+  font-size: 15px;
+}
+
+/* =========================================
+   6. MOBILE RESPONSIVENESS
+   ========================================= */
+@media (max-width: 768px) {
+  .container {
+    padding: 15px;
+  }
+
+  .actionsBar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .searchWrapper,
+  .filterWrapper,
+  .createButton {
+    width: 100%;
+  }
+
+  .createButton {
+    margin-top: 4px;
+  }
+
+  .title {
+    font-size: 24px;
+  }
+}

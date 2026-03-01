@@ -1,0 +1,212 @@
+/* src/components/Sidebar.css */
+
+/* --- Base Sidebar Styles --- */
+.sidebar-container {
+  height: 100%;
+  background: linear-gradient(145deg, #2b323c 0%, #11151a 100%);
+  color: #fafafa;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #3d4652;
+  transition:
+    width 0.3s ease-in-out,
+    transform 0.3s ease-in-out;
+  flex-shrink: 0;
+  z-index: 50;
+  font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+/* =========================================
+   ✅ HEADER FIXES (Stops the button getting squished)
+   ========================================= */
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 80px;
+  padding: 0 16px; /* Slightly reduced padding to fit everything safely */
+  box-sizing: border-box; /* CRITICAL: Prevents padding from breaking width */
+  width: 100%;
+  overflow: hidden;
+}
+
+.sidebar-header.collapsed {
+  justify-content: center;
+  padding: 0;
+}
+
+.brand-zone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0; /* CRITICAL: Allows the text to truncate instead of pushing the button off screen */
+}
+
+/* Makes the logo look like a premium rounded app icon if it has a white background */
+.brand-logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  background-color: #ffffff;
+  border-radius: 6px;
+  padding: 2px;
+  flex-shrink: 0; /* Stops the logo from squishing */
+}
+
+.brand-text {
+  color: #ffffff;
+  margin: 0;
+  font-size: 16px; /* Adjusted to fit cleanly inside 240px */
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* Adds "..." if the text ever gets too long */
+  font-family: "'Montserrat', 'Helvetica Neue', Arial, sans-serif";
+  text-transform: uppercase;
+}
+
+.desktop-toggle {
+  display: flex;
+  background: #3d4652;
+  border: 1px solid #4b5563;
+  color: #e5e5e5;
+  border-radius: 6px;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  flex-shrink: 0; /* CRITICAL: Stops the button from shrinking or warping */
+}
+
+.desktop-toggle:hover {
+  background: #4b5563;
+}
+
+/* =========================================
+   --- Navigation Links --- 
+   ========================================= */
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  text-decoration: none;
+  font-weight: 500;
+  color: #94a3b8;
+  background: transparent;
+  border-left: 3px solid transparent;
+  transition: all 0.2s ease-in-out;
+  white-space: nowrap;
+}
+
+.sidebar-link:not(.active):hover {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    transparent 100%
+  );
+  color: #ffffff;
+}
+
+.sidebar-link.active {
+  font-weight: 600;
+  color: #f59e0b;
+  background: linear-gradient(
+    90deg,
+    rgba(245, 158, 11, 0.15) 0%,
+    transparent 100%
+  );
+  border-left: 3px solid #f59e0b;
+}
+
+/* --- Logout Button --- */
+.logout-btn {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.logout-btn.open {
+  justify-content: flex-start;
+}
+.logout-btn.closed {
+  justify-content: center;
+}
+.logout-btn:hover {
+  color: #ef4444;
+}
+
+/* Mobile Toggle Button (Hidden on Desktop) */
+.mobile-toggle-btn {
+  display: none;
+}
+
+/* Overlay (Hidden on Desktop) */
+.mobile-overlay {
+  display: none;
+}
+
+/* --- 📱 Mobile Responsive Rules (Max-width 768px) --- */
+@media (max-width: 768px) {
+  .mobile-toggle-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    z-index: 1001;
+    background: linear-gradient(145deg, #2b323c 0%, #11151a 100%);
+    border: 1px solid #3d4652;
+    padding: 8px;
+    border-radius: 6px;
+    color: white;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+  }
+
+  .desktop-toggle {
+    display: none !important;
+  }
+
+  .sidebar-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    z-index: 1000;
+    width: 240px !important;
+    transform: translateX(-100%);
+  }
+
+  .sidebar-container.mobile-open {
+    transform: translateX(0);
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.8);
+  }
+
+  .sidebar-label {
+    opacity: 1 !important;
+    display: inline-block !important;
+    margin-left: 12px !important;
+  }
+
+  .mobile-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 900;
+    backdrop-filter: blur(4px);
+  }
+}

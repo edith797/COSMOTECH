@@ -90,9 +90,12 @@
   transform: translateY(-50%);
   color: #94a3b8;
   pointer-events: none;
+  z-index: 1;
 }
 
-.filterSelect {
+/* Base styles shared by both normal Selects and Typed Inputs */
+.filterSelect,
+.filterInput {
   width: 100%;
   padding: 10px 36px 10px 42px;
   border: 1px solid #cbd5e1;
@@ -100,17 +103,36 @@
   font-size: 14px;
   background-color: #ffffff;
   color: #334155;
+  height: 44px;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+/* Dropdown specific */
+.filterSelect {
   cursor: pointer;
   appearance: none;
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2364748b' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
   background-position: right 0.75rem center;
   background-repeat: no-repeat;
   background-size: 1.5em 1.5em;
-  height: 44px;
-  transition: all 0.2s ease;
 }
 
-.filterSelect:focus {
+/* Typed Input specific */
+.filterInput {
+  cursor: text;
+}
+.filterInput::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.filterInput::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+.filterSelect:focus,
+.filterInput:focus {
   outline: none;
   border-color: #f59e0b;
   box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
@@ -220,7 +242,6 @@
   transition: all 0.2s ease;
 }
 
-/* Edit Button Hover (Gunmetal instead of Blue) */
 .actionBtn:hover:has(svg[color="#475569"]) {
   background-color: #f1f5f9;
   border-color: #e2e8f0;
@@ -229,19 +250,62 @@
   color: #0f172a !important;
 }
 
-/* Delete Button Specifics */
 .actionBtn:hover:has(svg[color="#ef4444"]) {
   background-color: #fef2f2;
   border-color: #fecaca;
 }
 
-/* Fallback if :has isn't supported */
 .actionBtn:hover {
   background-color: #f1f5f9;
 }
 
 /* =========================================
-   5. UTILS
+   5. PAGINATION (NEW)
+   ========================================= */
+.paginationContainer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 16px 0;
+  gap: 16px;
+}
+
+.pageButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #334155;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.2s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.pageButton:hover:not(:disabled) {
+  background-color: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.pageButton:disabled {
+  background-color: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.pageText {
+  font-size: 14px;
+  color: #475569;
+  font-weight: 600;
+}
+
+/* =========================================
+   6. UTILS
    ========================================= */
 .cellContent {
   display: flex;
@@ -258,7 +322,7 @@
 }
 
 /* =========================================
-   6. MOBILE RESPONSIVENESS
+   7. MOBILE RESPONSIVENESS
    ========================================= */
 @media (max-width: 768px) {
   .container {
@@ -283,5 +347,9 @@
 
   .title {
     font-size: 24px;
+  }
+
+  .paginationContainer {
+    justify-content: center;
   }
 }

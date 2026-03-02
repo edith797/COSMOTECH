@@ -1,20 +1,13 @@
-
 export async function getNextQuotationNumber(supabase) {
-  // 1. Call the secure database function
-  // This runs as "Admin" on the server, so it sees ALL quotes
-  const { data, error } = await supabase.rpc("get_max_quotation_number");
+  // Call our new super-smart Database Function!
+  const { data, error } = await supabase.rpc("get_next_quote_number");
 
   if (error) {
-    console.error("Error fetching max quotation number:", error);
-    return "QUTE001"; // Safety fallback
+    console.error("Error fetching next quotation number:", error);
+    // Absolute worst-case safety fallback
+    const fallbackYear = String(new Date().getFullYear()).slice(-2);
+    return `CET-001/${fallbackYear}`;
   }
 
-  // 2. Logic: If null (no quotes yet), start at QUTE000
-  const lastNumber = data || "QUTE000";
-  
-  // 3. Increment
-  const nextNum = parseInt(lastNumber.replace("QUTE", ""), 10) + 1;
-
-  // 4. Format (e.g., 5 -> QUTE005)
-  return `QUTE${String(nextNum).padStart(3, "0")}`;
+  return data; // e.g., "CET-256/26" or "CET-001/27"
 }

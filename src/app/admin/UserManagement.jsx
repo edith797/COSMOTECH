@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
-import { User, Mail, Briefcase, Plus, Loader2, Search } from "lucide-react";
+import {
+  User,
+  Mail,
+  Briefcase,
+  Plus,
+  Loader2,
+  Search,
+  Phone,
+} from "lucide-react"; // ✅ Added Phone icon
 import styles from "./UserManagement.module.css";
 
 export default function UserManagement() {
@@ -11,12 +19,16 @@ export default function UserManagement() {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [designation, setDesignation] = useState("");
+  const [contactNumber, setContactNumber] = useState(""); // ✅ Added Contact state
 
   async function fetchUsers() {
     try {
       const { data, error } = await supabase
         .from("employees")
-        .select("id, email, full_name, designation, user_id, is_active")
+        // ✅ Added contact_number to the fetch list
+        .select(
+          "id, email, full_name, designation, contact_number, user_id, is_active",
+        )
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -45,14 +57,17 @@ export default function UserManagement() {
         email,
         full_name: fullName,
         designation,
+        contact_number: contactNumber, // ✅ Sending contact number to DB
         is_active: true,
       });
 
       if (error) throw error;
 
+      // Clear the form
       setEmail("");
       setFullName("");
       setDesignation("");
+      setContactNumber(""); // ✅ Clear contact field
       fetchUsers();
     } catch (err) {
       alert(err.message);
@@ -110,6 +125,17 @@ export default function UserManagement() {
             />
           </div>
 
+          {/* ✅ Contact Number */}
+          <div className={styles.inputWrapper}>
+            <Phone className={styles.icon} size={18} />
+            <input
+              className={styles.input}
+              placeholder="Contact Number (e.g. +91 9876543210)"
+              value={contactNumber}
+              onChange={(e) => setContactNumber(e.target.value)}
+            />
+          </div>
+
           {/* Submit Button */}
           <button
             className={styles.addButton}
@@ -137,6 +163,7 @@ export default function UserManagement() {
                 <tr>
                   <th>Name</th>
                   <th>Email</th>
+                  <th>Contact</th> {/* ✅ New Header */}
                   <th>Designation</th>
                   <th>Status</th>
                 </tr>
@@ -151,6 +178,12 @@ export default function UserManagement() {
                       {u.full_name}
                     </td>
                     <td>{u.email}</td>
+                    <td>
+                      {/* ✅ Display Contact Number */}
+                      {u.contact_number || (
+                        <span className={styles.muted}>-</span>
+                      )}
+                    </td>
                     <td>
                       {u.designation || <span className={styles.muted}>-</span>}
                     </td>
@@ -168,7 +201,7 @@ export default function UserManagement() {
 
                 {users.length === 0 && (
                   <tr>
-                    <td colSpan="4" className={styles.emptyState}>
+                    <td colSpan="5" className={styles.emptyState}>
                       No employees found. Add one above.
                     </td>
                   </tr>

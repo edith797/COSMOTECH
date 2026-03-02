@@ -227,6 +227,13 @@ export default function QuotationPreview() {
                             {quotation.mode_of_enquiry}
                           </span>
                         </div>
+                        {/* ✅ ADDED: Contact Number Row */}
+                        <div className="meta-row">
+                          <span className="meta-lbl">Contact:</span>
+                          <span className="meta-val">
+                            {signatory?.contact_number || "Not Provided"}
+                          </span>
+                        </div>
                       </div>
                     )}
                     {!isFirstPage && (

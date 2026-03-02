@@ -10,9 +10,15 @@ import {
   Edit,
   User,
   Loader2,
-  History, // ✅ Icon for old versions
+  History,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import styles from "./AllQuotations.module.css";
+
+// ✅ MAXIMUM QUOTES PER PAGE
+const ITEMS_PER_PAGE = 20;
 
 export default function AllQuotations() {
   const [quotes, setQuotes] = useState([]);
@@ -24,7 +30,11 @@ export default function AllQuotations() {
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCompany, setSelectedCompany] = useState("");
-  const [filterUser, setFilterUser] = useState("");
+  const [filterUserName, setFilterUserName] = useState(""); // ✅ Upgraded to name-based text search
+  const [filterYear, setFilterYear] = useState("");
+
+  // ✅ Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
 
   const navigate = useNavigate();
 
@@ -61,7 +71,6 @@ export default function AllQuotations() {
             companies ( company_name )
           `,
           )
-          // ✅ SHOWS EVERYTHING (History + Latest)
           .order("created_at", { ascending: false });
 
         if (error) throw error;
@@ -97,31 +106,72 @@ export default function AllQuotations() {
     setUpdating(null);
   }
 
+  const getFinancialYear = (dateStr) => {
+    if (!dateStr) return "Unknown";
+    const d = new Date(dateStr);
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    const startYear = month < 3 ? year - 1 : year;
+    return `FY ${startYear}-${String(startYear + 1).slice(-2)}`;
+  };
+
   const uniqueCompanies = useMemo(() => {
     const names = quotes.map((q) => q.companies?.company_name).filter(Boolean);
     return [...new Set(names)].sort();
   }, [quotes]);
 
+  const uniqueYears = useMemo(() => {
+    const years = quotes.map((q) => getFinancialYear(q.quotation_date));
+    return [...new Set(years)].sort().reverse();
+  }, [quotes]);
+
+  // ✅ 1. Filter the entire dataset
   const filteredQuotes = quotes.filter((q) => {
     const matchesSearch = q.quotation_number
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
-    const matchesCompany = selectedCompany
-      ? q.companies?.company_name === selectedCompany
-      : true;
-    const matchesUser = filterUser ? q.created_by === filterUser : true;
 
-    return matchesSearch && matchesCompany && matchesUser;
+    // Type-to-search for company
+    const matchesCompany = selectedCompany
+      ? q.companies?.company_name
+          ?.toLowerCase()
+          .includes(selectedCompany.toLowerCase())
+      : true;
+
+    // Type-to-search for employee
+    const empName = employeeLookup[q.created_by] || "Admin/System";
+    const matchesUser = filterUserName
+      ? empName.toLowerCase().includes(filterUserName.toLowerCase())
+      : true;
+
+    const matchesYear = filterYear
+      ? getFinancialYear(q.quotation_date) === filterYear
+      : true;
+
+    return matchesSearch && matchesCompany && matchesUser && matchesYear;
   });
+
+  // ✅ Reset to page 1 anytime the user types in a filter!
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedCompany, filterUserName, filterYear]);
+
+  // ✅ 2. Slice the data for Pagination (Only take 20 items for the current page)
+  const totalPages = Math.ceil(filteredQuotes.length / ITEMS_PER_PAGE) || 1;
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const currentQuotes = filteredQuotes.slice(
+    startIndex,
+    startIndex + ITEMS_PER_PAGE,
+  );
 
   const getStatusColor = (status) => {
     switch (status) {
       case "APPROVED":
-        return "#10B981"; // Emerald
+        return "#10B981";
       case "REJECTED":
-        return "#EF4444"; // Red
+        return "#EF4444";
       default:
-        return "#F59E0B"; // Amber
+        return "#F59E0B";
     }
   };
 
@@ -148,36 +198,58 @@ export default function AllQuotations() {
           />
         </div>
 
+        {/* Year Filter */}
         <div className={styles.filterWrapper}>
-          <Building2 size={16} className={styles.filterIcon} />
+          <Calendar size={16} className={styles.filterIcon} />
           <select
-            value={selectedCompany}
-            onChange={(e) => setSelectedCompany(e.target.value)}
+            value={filterYear}
+            onChange={(e) => setFilterYear(e.target.value)}
             className={styles.filterSelect}
           >
-            <option value="">All Companies</option>
-            {uniqueCompanies.map((c) => (
-              <option key={c} value={c}>
-                {c}
+            <option value="">All Years</option>
+            {uniqueYears.map((y) => (
+              <option key={y} value={y}>
+                {y}
               </option>
             ))}
           </select>
         </div>
 
+        {/* ✅ Searchable Typed Dropdown: Company */}
+        <div className={styles.filterWrapper}>
+          <Building2 size={16} className={styles.filterIcon} />
+          <input
+            type="text"
+            list="company-list"
+            placeholder="Type Company..."
+            value={selectedCompany}
+            onChange={(e) => setSelectedCompany(e.target.value)}
+            className={styles.filterInput} /* ✅ Fixed Class Name */
+          />
+          <datalist id="company-list">
+            {uniqueCompanies.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+        </div>
+
+        {/* ✅ Searchable Typed Dropdown: Employee */}
         <div className={styles.filterWrapper}>
           <User size={16} className={styles.filterIcon} />
-          <select
-            value={filterUser}
-            onChange={(e) => setFilterUser(e.target.value)}
-            className={styles.filterSelect}
-          >
-            <option value="">All Employees</option>
+          <input
+            type="text"
+            list="employee-list"
+            placeholder="Type Employee..."
+            value={filterUserName}
+            onChange={(e) => setFilterUserName(e.target.value)}
+            className={styles.filterInput} /* ✅ Fixed Class Name */
+          />
+          <datalist id="employee-list">
             {employees.map((e) => (
-              <option key={e.user_id} value={e.user_id}>
-                {e.full_name}
-              </option>
+              <option key={e.user_id} value={e.full_name} />
             ))}
-          </select>
+            <option value="Admin/System" />
+          </datalist>
         </div>
 
         <button
@@ -199,205 +271,260 @@ export default function AllQuotations() {
           <p>Loading Quotations...</p>
         </div>
       ) : (
-        <div className={styles.tableContainer}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th className={styles.th}>Quote No</th>
-                <th className={styles.th}>Created By</th>
-                <th className={styles.th}>Company</th>
-                <th className={styles.th}>Date</th>
-                <th className={styles.th}>Total</th>
-                <th className={styles.th}>Status</th>
-                <th className={styles.th} style={{ textAlign: "right" }}>
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredQuotes.length > 0 ? (
-                filteredQuotes.map((q) => (
-                  <tr
-                    key={q.id}
-                    className={styles.tr}
-                    onClick={() => navigate(`/admin/quotations/${q.id}`)}
-                    style={{ opacity: q.is_latest ? 1 : 0.65 }}
-                  >
-                    <td className={styles.td}>
-                      <div className={styles.cellContent}>
-                        {q.is_latest ? (
-                          <FileText
-                            size={16}
-                            color="#475569"
-                          /> /* Premium Slate instead of Blue */
-                        ) : (
-                          <History size={16} color="#94a3b8" />
-                        )}
-
+        <>
+          <div className={styles.tableContainer}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th className={styles.th}>Quote No</th>
+                  <th className={styles.th}>Created By</th>
+                  <th className={styles.th}>Company</th>
+                  <th className={styles.th}>Date</th>
+                  <th className={styles.th}>Total</th>
+                  <th className={styles.th}>Status</th>
+                  <th className={styles.th} style={{ textAlign: "right" }}>
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentQuotes.length > 0 ? (
+                  // ✅ Map over currentQuotes (Max 20), NOT all filteredQuotes
+                  currentQuotes.map((q) => (
+                    <tr
+                      key={q.id}
+                      className={styles.tr}
+                      onClick={() => navigate(`/admin/quotations/${q.id}`)}
+                      style={{ opacity: q.is_latest ? 1 : 0.65 }}
+                    >
+                      <td className={styles.td}>
+                        <div className={styles.cellContent}>
+                          {q.is_latest ? (
+                            <FileText size={16} color="#475569" />
+                          ) : (
+                            <History size={16} color="#94a3b8" />
+                          )}
+                          <span
+                            style={{
+                              fontWeight: 600,
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                              color: "#0f172a",
+                            }}
+                          >
+                            {q.quotation_number}
+                            {q.revision_no > 0 && (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  backgroundColor: "#f1f5f9",
+                                  padding: "3px 6px",
+                                  borderRadius: "4px",
+                                  color: "#475569",
+                                  fontWeight: "700",
+                                  border: "1px solid #e2e8f0",
+                                }}
+                              >
+                                Rev-{q.revision_no}
+                              </span>
+                            )}
+                            {!q.is_latest && (
+                              <span
+                                style={{
+                                  fontSize: "9px",
+                                  backgroundColor: "#fffbeb",
+                                  color: "#d97706",
+                                  padding: "3px 6px",
+                                  borderRadius: "4px",
+                                  border: "1px solid #fde68a",
+                                  fontWeight: "700",
+                                }}
+                              >
+                                HISTORY
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      </td>
+                      <td className={styles.td}>
                         <span
                           style={{
-                            fontWeight: 600,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "8px",
-                            color: "#0f172a",
+                            fontSize: "13px",
+                            color: "#475569",
+                            fontWeight: "500",
                           }}
                         >
-                          {q.quotation_number}
-
-                          {/* ✅ Revision Badge */}
-                          {q.revision_no > 0 && (
-                            <span
-                              style={{
-                                fontSize: "10px",
-                                backgroundColor: "#f1f5f9",
-                                padding: "3px 6px",
-                                borderRadius: "4px",
-                                color: "#475569",
-                                fontWeight: "700",
-                                border: "1px solid #e2e8f0",
-                              }}
-                            >
-                              Rev-{q.revision_no}
-                            </span>
-                          )}
-
-                          {/* ✅ "OLD" Label for non-latest */}
-                          {!q.is_latest && (
-                            <span
-                              style={{
-                                fontSize: "9px",
-                                backgroundColor: "#fffbeb",
-                                color: "#d97706",
-                                padding: "3px 6px",
-                                borderRadius: "4px",
-                                border: "1px solid #fde68a",
-                                fontWeight: "700",
-                                letterSpacing: "0.5px",
-                              }}
-                            >
-                              HISTORY
-                            </span>
-                          )}
+                          {employeeLookup[q.created_by] || "Admin/System"}
                         </span>
-                      </div>
-                    </td>
-
-                    <td className={styles.td}>
-                      <span
-                        style={{
-                          fontSize: "13px",
-                          color: "#475569",
-                          fontWeight: "500",
-                        }}
+                      </td>
+                      <td
+                        className={styles.td}
+                        style={{ color: "#334155", fontWeight: "500" }}
                       >
-                        {employeeLookup[q.created_by] || "Admin/System"}
-                      </span>
-                    </td>
-
-                    <td
-                      className={styles.td}
-                      style={{ color: "#334155", fontWeight: "500" }}
-                    >
-                      {q.companies?.company_name || "Unknown"}
-                    </td>
-                    <td className={styles.td} style={{ color: "#64748b" }}>
-                      {new Date(q.quotation_date).toLocaleDateString("en-IN")}
-                    </td>
-                    <td
-                      className={styles.td}
-                      style={{ fontWeight: 700, color: "#0f172a" }}
-                    >
-                      ₹ {Number(q.total_amount).toLocaleString("en-IN")}
-                    </td>
-
-                    <td
-                      className={styles.td}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {updating === q.id ? (
-                        <Loader2
-                          className="spin-anim"
-                          size={16}
-                          color="#64748b"
-                        />
-                      ) : (
-                        <select
-                          value={q.status || "DRAFT"}
-                          onChange={(e) =>
-                            handleStatusChange(e, q.id, e.target.value)
-                          }
-                          disabled={!q.is_latest}
-                          style={{
-                            padding: "6px 10px",
-                            borderRadius: "20px",
-                            border: q.is_latest
-                              ? `1px solid ${getStatusColor(q.status)}40`
-                              : "1px solid #e2e8f0",
-                            fontSize: "11px",
-                            fontWeight: "700",
-                            letterSpacing: "0.5px",
-                            color: q.is_latest
-                              ? getStatusColor(q.status)
-                              : "#94a3b8",
-                            backgroundColor: q.is_latest
-                              ? `${getStatusColor(q.status)}15`
-                              : "#f8fafc",
-                            cursor: q.is_latest ? "pointer" : "not-allowed",
-                            outline: "none",
-                            appearance: "none",
-                            textAlign: "center",
-                          }}
+                        {q.companies?.company_name || "Unknown"}
+                      </td>
+                      <td className={styles.td} style={{ color: "#64748b" }}>
+                        {new Date(q.quotation_date).toLocaleDateString("en-IN")}
+                      </td>
+                      <td
+                        className={styles.td}
+                        style={{ fontWeight: 700, color: "#0f172a" }}
+                      >
+                        ₹ {Number(q.total_amount).toLocaleString("en-IN")}
+                      </td>
+                      <td
+                        className={styles.td}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {updating === q.id ? (
+                          <Loader2
+                            className="spin-anim"
+                            size={16}
+                            color="#64748b"
+                          />
+                        ) : (
+                          <select
+                            value={q.status || "DRAFT"}
+                            onChange={(e) =>
+                              handleStatusChange(e, q.id, e.target.value)
+                            }
+                            disabled={!q.is_latest}
+                            style={{
+                              padding: "6px 10px",
+                              borderRadius: "20px",
+                              border: q.is_latest
+                                ? `1px solid ${getStatusColor(q.status)}40`
+                                : "1px solid #e2e8f0",
+                              fontSize: "11px",
+                              fontWeight: "700",
+                              letterSpacing: "0.5px",
+                              color: q.is_latest
+                                ? getStatusColor(q.status)
+                                : "#94a3b8",
+                              backgroundColor: q.is_latest
+                                ? `${getStatusColor(q.status)}15`
+                                : "#f8fafc",
+                              cursor: q.is_latest ? "pointer" : "not-allowed",
+                              outline: "none",
+                              appearance: "none",
+                              textAlign: "center",
+                            }}
+                          >
+                            <option value="DRAFT">DRAFT</option>
+                            <option value="APPROVED">APPROVED</option>
+                            <option value="REJECTED">REJECTED</option>
+                          </select>
+                        )}
+                      </td>
+                      <td className={styles.td}>
+                        <div
+                          className={styles.actionsCell}
+                          style={{ justifyContent: "flex-end" }}
                         >
-                          <option value="DRAFT">DRAFT</option>
-                          <option value="APPROVED">APPROVED</option>
-                          <option value="REJECTED">REJECTED</option>
-                        </select>
-                      )}
-                    </td>
-
-                    <td className={styles.td}>
-                      <div
-                        className={styles.actionsCell}
-                        style={{ justifyContent: "flex-end" }}
-                      >
-                        {/* Only show EDIT button if it is the LATEST version */}
-                        {q.is_latest && (
+                          {q.is_latest && q.revision_no < 1 && (
+                            <button
+                              className={styles.actionBtn}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/admin/quotations/edit/${q.id}`);
+                              }}
+                              title="Create New Revision"
+                            >
+                              <Edit size={16} color="#475569" />
+                            </button>
+                          )}
                           <button
                             className={styles.actionBtn}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/admin/quotations/edit/${q.id}`);
-                            }}
-                            title="Create New Revision"
+                            onClick={(e) => handleDelete(e, q.id)}
+                            title="Delete Quotation"
                           >
-                            <Edit size={16} color="#475569" />
+                            <Trash2 size={16} color="#ef4444" />
                           </button>
-                        )}
-
-                        <button
-                          className={styles.actionBtn}
-                          onClick={(e) => handleDelete(e, q.id)}
-                          title="Delete Quotation"
-                        >
-                          <Trash2 size={16} color="#ef4444" />
-                        </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="7">
+                      <div className={styles.emptyState}>
+                        No quotations found matching your search.
                       </div>
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan="7">
-                    <div className={styles.emptyState}>
-                      No quotations found matching your search.
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ✅ PAGINATION CONTROLS */}
+          {totalPages > 1 && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                alignItems: "center",
+                padding: "15px 0",
+                gap: "15px",
+              }}
+            >
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  backgroundColor: currentPage === 1 ? "#f8fafc" : "#fff",
+                  color: currentPage === 1 ? "#94a3b8" : "#334155",
+                  cursor: currentPage === 1 ? "not-allowed" : "pointer",
+                  fontWeight: "500",
+                  fontSize: "14px",
+                }}
+              >
+                <ChevronLeft size={16} /> Previous
+              </button>
+
+              <span
+                style={{
+                  fontSize: "14px",
+                  color: "#475569",
+                  fontWeight: "500",
+                }}
+              >
+                Page {currentPage} of {totalPages}
+              </span>
+
+              <button
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
+                disabled={currentPage === totalPages}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  padding: "8px 12px",
+                  borderRadius: "6px",
+                  border: "1px solid #cbd5e1",
+                  backgroundColor:
+                    currentPage === totalPages ? "#f8fafc" : "#fff",
+                  color: currentPage === totalPages ? "#94a3b8" : "#334155",
+                  cursor:
+                    currentPage === totalPages ? "not-allowed" : "pointer",
+                  fontWeight: "500",
+                  fontSize: "14px",
+                }}
+              >
+                Next <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

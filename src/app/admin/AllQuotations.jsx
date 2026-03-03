@@ -14,10 +14,10 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  FilePlus, // ✅ Added FilePlus for Revise
 } from "lucide-react";
 import styles from "./AllQuotations.module.css";
 
-// ✅ MAXIMUM QUOTES PER PAGE
 const ITEMS_PER_PAGE = 20;
 
 export default function AllQuotations() {
@@ -30,10 +30,9 @@ export default function AllQuotations() {
   // Filters
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCompany, setSelectedCompany] = useState("");
-  const [filterUserName, setFilterUserName] = useState(""); // ✅ Upgraded to name-based text search
+  const [filterUserName, setFilterUserName] = useState("");
   const [filterYear, setFilterYear] = useState("");
 
-  // ✅ Pagination State
   const [currentPage, setCurrentPage] = useState(1);
 
   const navigate = useNavigate();
@@ -125,20 +124,17 @@ export default function AllQuotations() {
     return [...new Set(years)].sort().reverse();
   }, [quotes]);
 
-  // ✅ 1. Filter the entire dataset
   const filteredQuotes = quotes.filter((q) => {
     const matchesSearch = q.quotation_number
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
 
-    // Type-to-search for company
     const matchesCompany = selectedCompany
       ? q.companies?.company_name
           ?.toLowerCase()
           .includes(selectedCompany.toLowerCase())
       : true;
 
-    // Type-to-search for employee
     const empName = employeeLookup[q.created_by] || "Admin/System";
     const matchesUser = filterUserName
       ? empName.toLowerCase().includes(filterUserName.toLowerCase())
@@ -151,12 +147,10 @@ export default function AllQuotations() {
     return matchesSearch && matchesCompany && matchesUser && matchesYear;
   });
 
-  // ✅ Reset to page 1 anytime the user types in a filter!
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, selectedCompany, filterUserName, filterYear]);
 
-  // ✅ 2. Slice the data for Pagination (Only take 20 items for the current page)
   const totalPages = Math.ceil(filteredQuotes.length / ITEMS_PER_PAGE) || 1;
   const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
   const currentQuotes = filteredQuotes.slice(
@@ -198,7 +192,6 @@ export default function AllQuotations() {
           />
         </div>
 
-        {/* Year Filter */}
         <div className={styles.filterWrapper}>
           <Calendar size={16} className={styles.filterIcon} />
           <select
@@ -215,7 +208,6 @@ export default function AllQuotations() {
           </select>
         </div>
 
-        {/* ✅ Searchable Typed Dropdown: Company */}
         <div className={styles.filterWrapper}>
           <Building2 size={16} className={styles.filterIcon} />
           <input
@@ -224,7 +216,7 @@ export default function AllQuotations() {
             placeholder="Type Company..."
             value={selectedCompany}
             onChange={(e) => setSelectedCompany(e.target.value)}
-            className={styles.filterInput} /* ✅ Fixed Class Name */
+            className={styles.filterInput}
           />
           <datalist id="company-list">
             {uniqueCompanies.map((c) => (
@@ -233,7 +225,6 @@ export default function AllQuotations() {
           </datalist>
         </div>
 
-        {/* ✅ Searchable Typed Dropdown: Employee */}
         <div className={styles.filterWrapper}>
           <User size={16} className={styles.filterIcon} />
           <input
@@ -242,7 +233,7 @@ export default function AllQuotations() {
             placeholder="Type Employee..."
             value={filterUserName}
             onChange={(e) => setFilterUserName(e.target.value)}
-            className={styles.filterInput} /* ✅ Fixed Class Name */
+            className={styles.filterInput}
           />
           <datalist id="employee-list">
             {employees.map((e) => (
@@ -289,7 +280,6 @@ export default function AllQuotations() {
               </thead>
               <tbody>
                 {currentQuotes.length > 0 ? (
-                  // ✅ Map over currentQuotes (Max 20), NOT all filteredQuotes
                   currentQuotes.map((q) => (
                     <tr
                       key={q.id}
@@ -422,18 +412,34 @@ export default function AllQuotations() {
                           className={styles.actionsCell}
                           style={{ justifyContent: "flex-end" }}
                         >
-                          {q.is_latest && q.revision_no < 1 && (
+                          {/* ✅ 1. NORMAL EDIT (Pencil - Updates same record) */}
+                          {q.is_latest && (
                             <button
                               className={styles.actionBtn}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 navigate(`/admin/quotations/edit/${q.id}`);
                               }}
-                              title="Create New Revision"
+                              title="Edit Quotation"
                             >
-                              <Edit size={16} color="#475569" />
+                              <Edit size={16} color="#3b82f6" />
                             </button>
                           )}
+
+                          {/* ✅ 2. CREATE REVISION (FilePlus - Creates new record, only if rev < 1) */}
+                          {q.is_latest && q.revision_no < 1 && (
+                            <button
+                              className={styles.actionBtn}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/admin/quotations/revise/${q.id}`);
+                              }}
+                              title="Create New Revision"
+                            >
+                              <FilePlus size={16} color="#8b5cf6" />
+                            </button>
+                          )}
+
                           <button
                             className={styles.actionBtn}
                             onClick={(e) => handleDelete(e, q.id)}
@@ -458,67 +464,26 @@ export default function AllQuotations() {
             </table>
           </div>
 
-          {/* ✅ PAGINATION CONTROLS */}
           {totalPages > 1 && (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-                alignItems: "center",
-                padding: "15px 0",
-                gap: "15px",
-              }}
-            >
+            <div className={styles.paginationContainer}>
               <button
+                className={styles.pageButton}
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  padding: "8px 12px",
-                  borderRadius: "6px",
-                  border: "1px solid #cbd5e1",
-                  backgroundColor: currentPage === 1 ? "#f8fafc" : "#fff",
-                  color: currentPage === 1 ? "#94a3b8" : "#334155",
-                  cursor: currentPage === 1 ? "not-allowed" : "pointer",
-                  fontWeight: "500",
-                  fontSize: "14px",
-                }}
               >
                 <ChevronLeft size={16} /> Previous
               </button>
 
-              <span
-                style={{
-                  fontSize: "14px",
-                  color: "#475569",
-                  fontWeight: "500",
-                }}
-              >
+              <span className={styles.pageText}>
                 Page {currentPage} of {totalPages}
               </span>
 
               <button
+                className={styles.pageButton}
                 onClick={() =>
                   setCurrentPage((p) => Math.min(totalPages, p + 1))
                 }
                 disabled={currentPage === totalPages}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "5px",
-                  padding: "8px 12px",
-                  borderRadius: "6px",
-                  border: "1px solid #cbd5e1",
-                  backgroundColor:
-                    currentPage === totalPages ? "#f8fafc" : "#fff",
-                  color: currentPage === totalPages ? "#94a3b8" : "#334155",
-                  cursor:
-                    currentPage === totalPages ? "not-allowed" : "pointer",
-                  fontWeight: "500",
-                  fontSize: "14px",
-                }}
               >
                 Next <ChevronRight size={16} />
               </button>

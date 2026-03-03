@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import AdminLogin from "./auth/AdminLogin";
 import useAuthInit from "./hooks/useAuthInit";
 import AuthRedirect from "./components/AuthRedirect";
-import ProtectedRoute from "./components/ProtectedRoute"; // ✅ Bouncer imported
+import ProtectedRoute from "./components/ProtectedRoute";
 
 // ================= ADMIN =================
 import AdminLayout from "./app/admin/AdminLayout";
@@ -35,7 +35,6 @@ export default function App() {
         <Route path="/admin/login" element={<AdminLogin />} />
 
         {/* ================= ADMIN AREA (Secured) ================= */}
-        {/* ✅ The Bouncer protects the entire Admin Layout! */}
         <Route
           path="/admin"
           element={
@@ -51,6 +50,8 @@ export default function App() {
           <Route path="quotations" element={<AllQuotations />} />
           <Route path="quotations/new" element={<CreateQuotation />} />
           <Route path="quotations/edit/:id" element={<CreateQuotation />} />
+          {/* ✅ ADDED REVISE ROUTE */}
+          <Route path="quotations/revise/:id" element={<CreateQuotation />} />
           <Route path="quotations/:id" element={<QuotationPreview />} />
 
           {/* Settings & Users */}
@@ -59,7 +60,6 @@ export default function App() {
         </Route>
 
         {/* ================= USER AREA (Secured) ================= */}
-        {/* ✅ The Bouncer protects the entire User Layout! */}
         <Route
           path="/user"
           element={
@@ -73,6 +73,11 @@ export default function App() {
 
           <Route path="quotations/new" element={<CreateQuotationUser />} />
           <Route path="quotations/edit/:id" element={<CreateQuotationUser />} />
+          {/* ✅ ADDED REVISE ROUTE FOR USERS TOO */}
+          <Route
+            path="quotations/revise/:id"
+            element={<CreateQuotationUser />}
+          />
           <Route path="quotations/:id" element={<QuotationPreview />} />
         </Route>
 

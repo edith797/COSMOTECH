@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { getNextQuotationNumber } from "../../components/quotationUtils";
 import {
@@ -14,17 +14,16 @@ import {
 } from "lucide-react";
 import styles from "./CreateQuotation.module.css";
 
-const CGST_PERCENT = 9;
-const SGST_PERCENT = 9;
-const IGST_PERCENT = 18;
-
-// ✅ GLOBAL MEMORY CACHE (Survives when you click around the app)
+// Shared cache to prevent reloading 41k items if you navigate away and back
 let globalItemsCache = null;
 
 export default function CreateQuotation() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const isEditMode = Boolean(id);
+  const location = useLocation();
+
+  const isReviseMode = Boolean(id) && location.pathname.includes("/revise/");
+  const isEditMode = Boolean(id) && location.pathname.includes("/edit/");
 
   const [userRole, setUserRole] = useState(null);
   const [quoteNo, setQuoteNo] = useState("");
@@ -38,11 +37,9 @@ export default function CreateQuotation() {
   const [saving, setSaving] = useState(false);
   const [itemsMaster, setItemsMaster] = useState([]);
   const [employees, setEmployees] = useState([]);
-
   const [isLoadingItems, setIsLoadingItems] = useState(true);
 
   const [signatoryId, setSignatoryId] = useState("");
-
   const [validFor, setValidFor] = useState("ONE MONTH");
   const [deliveryTime, setDeliveryTime] = useState("1-2 WEEKS");
   const [paymentTerms, setPaymentTerms] = useState("15 DAYS");
@@ -77,7 +74,7 @@ export default function CreateQuotation() {
 
         if (qError) throw qError;
 
-        if (!quote.is_latest) {
+        if (!quote.is_latest && isEditMode) {
           alert("This is an old revision and cannot be edited.");
           navigate("/admin/quotations");
           return;
@@ -106,22 +103,22 @@ export default function CreateQuotation() {
         if (iError) throw iError;
         if (qItems) setItems(qItems.map((i) => ({ ...i })));
       } catch (err) {
-        console.error(err);
+        console.error("Error loading quotation:", err);
         navigate("/admin/quotations");
       }
     },
-    [navigate],
+    [navigate, isEditMode],
   );
 
   useEffect(() => {
-    // ==========================================
-    // 1. FAST LOAD: Get the basic form ready instantly (0.01s)
-    // ==========================================
+    let isMounted = true;
+
     async function loadInstantData() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (user) {
+
+      if (user && isMounted) {
         const { data: profile } = await supabase
           .from("profiles")
           .select("role")
@@ -134,57 +131,54 @@ export default function CreateQuotation() {
         .from("companies")
         .select("id, company_name")
         .order("company_name");
-      setCompanies(compData || []);
+
+      if (isMounted) setCompanies(compData || []);
 
       const { data: empData } = await supabase
         .from("employees")
         .select("id, full_name, user_id")
         .eq("is_active", true)
         .order("full_name");
-      setEmployees(empData || []);
 
-      if (!isEditMode && user && empData) {
-        const myEmployeeRecord = empData.find((e) => e.user_id === user.id);
-        if (myEmployeeRecord) {
-          setSignatoryId(myEmployeeRecord.id);
-        }
+      if (isMounted) setEmployees(empData || []);
+
+      if (!isEditMode && !isReviseMode && user && empData && isMounted) {
+        const myEmployeeRecord = empData.find((emp) => emp.user_id === user.id);
+        if (myEmployeeRecord) setSignatoryId(myEmployeeRecord.id);
       }
 
-      if (isEditMode) {
+      if ((isEditMode || isReviseMode) && isMounted) {
         await loadQuotationForEdit(id);
-      } else {
+      } else if (isMounted) {
         const quotationNo = await getNextQuotationNumber(supabase);
         setQuoteNo(quotationNo);
       }
     }
 
-    // ==========================================
-    // 2. HEAVY LOAD: Process 41k items invisibly
-    // ==========================================
     async function loadMassiveItemDatabase() {
+      if (!isMounted) return;
       setIsLoadingItems(true);
 
-      // Try instant memory first (Fastest - 0.001s)
       if (globalItemsCache) {
         setItemsMaster(globalItemsCache);
         setIsLoadingItems(false);
-        return; // Exit early since we have the data!
+        return;
       }
 
-      // Try local hard drive cache second (Instant - 0.05s)
       try {
         const savedCache = localStorage.getItem("erp_master_items");
         if (savedCache) {
           const parsedCache = JSON.parse(savedCache);
           globalItemsCache = parsedCache;
-          setItemsMaster(parsedCache);
-          setIsLoadingItems(false); // Screen turns green instantly!
+          if (isMounted) {
+            setItemsMaster(parsedCache);
+            setIsLoadingItems(false);
+          }
         }
-      } catch (e) {
-        console.warn("Local cache empty or invalid:", e);
+      } catch {
+        console.warn("Local cache empty or invalid");
       }
 
-      // Fetch fresh updates from Supabase silently in parallel
       try {
         const { count } = await supabase
           .from("items")
@@ -210,55 +204,50 @@ export default function CreateQuotation() {
           if (res.data) allItems.push(...res.data);
         });
 
-        // Optimize array mapping to prevent UI freezing (Standard For-Loop is faster)
-        const cleanedItems = [];
-        for (let i = 0; i < allItems.length; i++) {
-          const item = allItems[i];
-          cleanedItems.push({
-            ...item,
-            item_code: item.item_code
-              ? String(item.item_code)
-                  .replace(/[\r\n\t]+/g, "")
-                  .trim()
-              : "",
-            item_name: item.item_name
-              ? String(item.item_name)
-                  .replace(/[\r\n\t]+/g, "")
-                  .trim()
-              : "",
-            rate: Number(item.rate) || 0,
-          });
-        }
+        const cleanedItems = allItems.map((item) => ({
+          ...item,
+          item_code: item.item_code
+            ? String(item.item_code)
+                .replace(/[\r\n\t]+/g, "")
+                .trim()
+            : "",
+          item_name: item.item_name
+            ? String(item.item_name)
+                .replace(/[\r\n\t]+/g, "")
+                .trim()
+            : "",
+          rate: Number(item.rate) || 0,
+        }));
 
-        // Update cache for next time
         globalItemsCache = cleanedItems;
-        setItemsMaster(cleanedItems);
-        setIsLoadingItems(false);
+        if (isMounted) {
+          setItemsMaster(cleanedItems);
+          setIsLoadingItems(false);
+        }
 
         try {
           localStorage.setItem(
             "erp_master_items",
             JSON.stringify(cleanedItems),
           );
-        } catch (e) {
-          // If browser storage is completely full, just log it
-          console.warn("Local storage might be full: ", e);
+        } catch {
+          // Silently ignore localStorage quota errors
         }
       } catch (err) {
         console.error("Background fetch failed", err);
       }
     }
 
-    // 🚀 EXECUTION ORDER
-    loadInstantData(); // 1. Fire the instant UI load
-
-    // 2. Wait 300ms for the UI to perfectly render, THEN trigger the heavy database lifting
+    loadInstantData();
     const deferTimer = setTimeout(() => {
       loadMassiveItemDatabase();
     }, 300);
 
-    return () => clearTimeout(deferTimer); // Cleanup if user leaves page instantly
-  }, [id, isEditMode, loadQuotationForEdit]);
+    return () => {
+      isMounted = false;
+      clearTimeout(deferTimer);
+    };
+  }, [id, isEditMode, isReviseMode, loadQuotationForEdit]);
 
   const subTotal = useMemo(
     () => items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
@@ -270,37 +259,32 @@ export default function CreateQuotation() {
   function updateItem(index, field, value) {
     const updated = [...items];
     updated[index][field] = value;
-
     const safeValue = value ? String(value).trim().toLowerCase() : "";
 
+    // SMART UPDATE: Checks BOTH code and name instantly
     if (field === "item_code" && safeValue) {
       const matched = itemsMaster.find(
-        (m) => m.item_code && m.item_code.toLowerCase() === safeValue,
+        (m) =>
+          (m.item_code && m.item_code.toLowerCase() === safeValue) ||
+          (m.item_name && m.item_name.toLowerCase() === safeValue),
       );
       if (matched) {
-        updated[index].item_code = matched.item_code;
-        updated[index].description = matched.item_name;
-        updated[index].rate = matched.rate;
-      } else {
-        const isOldDesc = itemsMaster.some(
-          (m) => m.item_name === updated[index].description,
-        );
-        if (isOldDesc) {
-          updated[index].description = "";
-          updated[index].rate = "";
-        }
+        updated[index].item_code = matched.item_code || "";
+        updated[index].description = matched.item_name || "";
+        updated[index].rate = matched.rate || 0;
       }
     }
 
     if (field === "description" && safeValue) {
       const matched = itemsMaster.find(
-        (m) => m.item_name && m.item_name.toLowerCase() === safeValue,
+        (m) =>
+          (m.item_name && m.item_name.toLowerCase() === safeValue) ||
+          (m.item_code && m.item_code.toLowerCase() === safeValue),
       );
       if (matched) {
-        updated[index].rate = matched.rate;
-        if (!updated[index].item_code) {
-          updated[index].item_code = matched.item_code;
-        }
+        updated[index].item_code = matched.item_code || "";
+        updated[index].description = matched.item_name || "";
+        updated[index].rate = matched.rate || 0;
       }
     }
 
@@ -313,11 +297,9 @@ export default function CreateQuotation() {
 
   async function saveQuotation() {
     if (!companyId) return alert("Select a company");
-    if (!signatoryId) {
-      return alert("Please select an Authorised Signatory from the dropdown.");
-    }
+    if (!signatoryId) return alert("Please select an Authorised Signatory.");
 
-    if (isEditMode && userRole !== "ADMIN") {
+    if (isReviseMode && userRole !== "ADMIN") {
       alert("Permission Denied: Only Admins can create revisions.");
       return;
     }
@@ -344,26 +326,8 @@ export default function CreateQuotation() {
         sgst = subTotal * 0.09;
       }
 
-      const newItemsToSave = [];
-      items.forEach((row) => {
-        if (!row.description.trim()) return;
-        const exists = itemsMaster.some((m) => {
-          if (row.item_code && row.item_code.trim() !== "")
-            return m.item_code === row.item_code;
-          return m.item_name.toLowerCase() === row.description.toLowerCase();
-        });
-        if (!exists) {
-          newItemsToSave.push({
-            item_name: row.description,
-            rate: row.rate,
-            item_code: row.item_code || null,
-          });
-        }
-      });
-      if (newItemsToSave.length > 0)
-        await supabase.from("items").insert(newItemsToSave);
-
-      const creatorToSave = isEditMode ? originalCreatorId || user.id : user.id;
+      const creatorToSave =
+        isEditMode || isReviseMode ? originalCreatorId || user.id : user.id;
 
       const quoteData = {
         quotation_number: quoteNo,
@@ -387,7 +351,7 @@ export default function CreateQuotation() {
 
       let finalId = null;
 
-      if (isEditMode) {
+      if (isReviseMode) {
         const { data: oldQuote } = await supabase
           .from("quotations")
           .select("revision_no, parent_quotation_id, id, created_by")
@@ -411,16 +375,22 @@ export default function CreateQuotation() {
           ])
           .select()
           .single();
-
         if (error) throw error;
         finalId = newQuote.id;
+      } else if (isEditMode) {
+        const { error } = await supabase
+          .from("quotations")
+          .update(quoteData)
+          .eq("id", id);
+        if (error) throw error;
+        finalId = id;
+        await supabase.from("quotation_items").delete().eq("quotation_id", id);
       } else {
         const { data: newQ, error } = await supabase
           .from("quotations")
           .insert([{ ...quoteData, revision_no: 0 }])
           .select()
           .single();
-
         if (error) throw error;
         finalId = newQ.id;
       }
@@ -444,32 +414,22 @@ export default function CreateQuotation() {
     }
   }
 
-  const filteredCompanies = useMemo(() => {
-    if (!companySearch.trim()) return companies;
-    return companies.filter((c) =>
-      c.company_name.toLowerCase().includes(companySearch.toLowerCase()),
-    );
-  }, [companies, companySearch]);
-
-  function selectCompany(comp) {
-    setCompanyId(comp.id);
-    setCompanySearch(comp.company_name);
-    setShowCompanyDropdown(false);
-  }
-
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <div style={{ display: "flex", flexDirection: "column" }}>
+        <div>
           <h1 className={styles.title}>
-            {isEditMode ? "Revised Quotation" : "New Quotation"}
+            {isReviseMode
+              ? "Create Revision"
+              : isEditMode
+                ? "Edit Quotation"
+                : "New Quotation"}
           </h1>
           <span
             style={{
-              color: isLoadingItems ? "#d97706" : "#059669",
-              fontWeight: "600",
+              color: isLoadingItems ? "#d97706" : "#16a34a",
+              fontWeight: "bold",
               fontSize: "13px",
-              marginTop: "4px",
               display: "flex",
               alignItems: "center",
               gap: "6px",
@@ -477,42 +437,29 @@ export default function CreateQuotation() {
           >
             {isLoadingItems ? (
               <>
-                <Loader2 className="spin-anim" size={14} /> Fetching database...
+                <Loader2 className="spin-anim" size={14} /> Fetching 41K Item
+                DB...
               </>
             ) : (
-              `✅ Ready: ${itemsMaster.length.toLocaleString()} items loaded`
+              `✅ Ready: ${itemsMaster.length} items loaded`
             )}
           </span>
         </div>
 
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "10px" }}>
           <button
             onClick={() => navigate("/admin/quotations")}
-            disabled={saving}
             className={styles.cancelBtn}
           >
             Cancel
           </button>
-
           <button
             onClick={saveQuotation}
-            disabled={
-              saving || (isEditMode && userRole !== "ADMIN") || isLoadingItems
-            }
+            disabled={saving || isLoadingItems}
             className={styles.saveBtn}
-            style={{
-              opacity:
-                (isEditMode && userRole !== "ADMIN") || isLoadingItems
-                  ? 0.6
-                  : 1,
-              cursor:
-                (isEditMode && userRole !== "ADMIN") || isLoadingItems
-                  ? "not-allowed"
-                  : "pointer",
-            }}
           >
-            {saving ? <Loader2 className="spin-anim" /> : <Save size={18} />}{" "}
-            Save Quotation
+            {saving ? <Loader2 className="spin-anim" /> : <Save size={18} />}
+            {isEditMode ? "Update Changes" : "Save"}
           </button>
         </div>
       </div>
@@ -529,69 +476,70 @@ export default function CreateQuotation() {
           />
         </div>
 
-        <div className={styles.fieldGroup}>
+        <div className={styles.fieldGroup} style={{ position: "relative" }}>
           <label className={styles.label}>
             <Building2 size={14} /> Company
           </label>
-          <div style={{ position: "relative" }}>
-            <input
-              type="text"
-              placeholder="Search company..."
-              value={companySearch}
-              onChange={(e) => {
-                setCompanySearch(e.target.value);
-                setShowCompanyDropdown(true);
-              }}
-              onFocus={() => setShowCompanyDropdown(true)}
-              className={styles.input}
-            />
-            {showCompanyDropdown && (
-              <div className={styles.dropdownMenu}>
-                {filteredCompanies.length > 0 ? (
-                  filteredCompanies.map((comp) => (
-                    <div
-                      key={comp.id}
-                      onClick={() => selectCompany(comp)}
-                      className={styles.dropdownItem}
-                    >
-                      {comp.company_name}
-                    </div>
-                  ))
-                ) : (
-                  <div className={styles.dropdownEmpty}>No companies found</div>
-                )}
-              </div>
-            )}
-          </div>
+          <input
+            type="text"
+            placeholder="Search company..."
+            value={companySearch}
+            onChange={(e) => {
+              setCompanySearch(e.target.value);
+              setShowCompanyDropdown(true);
+            }}
+            onFocus={() => setShowCompanyDropdown(true)}
+            className={styles.input}
+          />
+          {showCompanyDropdown && (
+            <div className={styles.dropdownMenu}>
+              {companies
+                .filter((c) =>
+                  c.company_name
+                    .toLowerCase()
+                    .includes(companySearch.toLowerCase()),
+                )
+                .map((comp) => (
+                  <div
+                    key={comp.id}
+                    onClick={() => {
+                      setCompanyId(comp.id);
+                      setCompanySearch(comp.company_name);
+                      setShowCompanyDropdown(false);
+                    }}
+                    className={styles.dropdownItem}
+                  >
+                    {comp.company_name}
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
 
         <div className={styles.fieldGroup}>
           <label className={styles.label}>
-            <User size={14} /> Attn Person
+            <User size={14} /> Attn
           </label>
           <input
             value={attn}
             onChange={(e) => setAttn(e.target.value)}
             className={styles.input}
-            placeholder="e.g. John Doe"
           />
         </div>
 
         <div className={styles.fieldGroup}>
           <label className={styles.label}>
-            Signatory{" "}
-            <span style={{ color: "#ef4444", marginLeft: "2px" }}>*</span>
+            Signatory <span style={{ color: "red" }}>*</span>
           </label>
           <select
             value={signatoryId}
             onChange={(e) => setSignatoryId(e.target.value)}
             className={styles.select}
-            style={{ borderColor: !signatoryId ? "#fca5a5" : "" }}
           >
             <option value="">-- Select Signatory --</option>
-            {employees.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.full_name}
+            {employees.map((emp) => (
+              <option key={emp.id} value={emp.id}>
+                {emp.full_name}
               </option>
             ))}
           </select>
@@ -624,18 +572,26 @@ export default function CreateQuotation() {
           />
         </div>
         <div className={styles.fieldGroup}>
-          <label className={styles.label}>Mode of Enquiry</label>
+          <label className={styles.label}>Date</label>
           <input
-            type="text"
-            placeholder="e.g. Email, Phone..."
-            value={modeOfEnquiry}
-            onChange={(e) => setModeOfEnquiry(e.target.value)}
+            type="date"
+            value={quotationDate}
+            onChange={(e) => setQuotationDate(e.target.value)}
             className={styles.input}
           />
         </div>
       </div>
 
-      {/* ✅ FIXED: Wrapped table in tableWrapper for horizontal scroll safety */}
+      <div className={styles.fieldGroup} style={{ marginBottom: "24px" }}>
+        <label className={styles.label}>Mode of Enquiry</label>
+        <input
+          value={modeOfEnquiry}
+          onChange={(e) => setModeOfEnquiry(e.target.value)}
+          className={styles.input}
+          placeholder="e.g. Direct Visit"
+        />
+      </div>
+
       <div className={styles.tableWrapper}>
         <table className={styles.table}>
           <thead>
@@ -646,31 +602,38 @@ export default function CreateQuotation() {
               <th>Rate</th>
               <th>Disc%</th>
               <th>Total</th>
-              <th style={{ width: "40px", textAlign: "center" }}></th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {items.map((item, idx) => {
-              const matchingCodes = item.item_code
+              // ✅ CROSS-FILTER THE ENTIRE 41K DB *BEFORE* SLICING
+              const searchCode = item.item_code
+                ? item.item_code.toLowerCase()
+                : "";
+              const matchingCodes = searchCode
                 ? itemsMaster
                     .filter(
                       (m) =>
-                        m.item_code &&
-                        m.item_code
-                          .toLowerCase()
-                          .includes(item.item_code.toLowerCase()),
+                        (m.item_code &&
+                          m.item_code.toLowerCase().includes(searchCode)) ||
+                        (m.item_name &&
+                          m.item_name.toLowerCase().includes(searchCode)),
                     )
                     .slice(0, 50)
                 : itemsMaster.slice(0, 50);
 
-              const matchingDesc = item.description
+              const searchDesc = item.description
+                ? item.description.toLowerCase()
+                : "";
+              const matchingDesc = searchDesc
                 ? itemsMaster
                     .filter(
                       (m) =>
-                        m.item_name &&
-                        m.item_name
-                          .toLowerCase()
-                          .includes(item.description.toLowerCase()),
+                        (m.item_name &&
+                          m.item_name.toLowerCase().includes(searchDesc)) ||
+                        (m.item_code &&
+                          m.item_code.toLowerCase().includes(searchDesc)),
                     )
                     .slice(0, 50)
                 : itemsMaster.slice(0, 50);
@@ -679,38 +642,36 @@ export default function CreateQuotation() {
                 <tr key={idx}>
                   <td>
                     <input
-                      list={`codes-list-${idx}`}
+                      list={`codes-${idx}`}
                       value={item.item_code || ""}
                       onChange={(e) =>
                         updateItem(idx, "item_code", e.target.value)
                       }
                       className={styles.tableInput}
-                      placeholder="Enter Code"
                       disabled={isLoadingItems}
                     />
-                    <datalist id={`codes-list-${idx}`}>
+                    <datalist id={`codes-${idx}`}>
                       {matchingCodes.map((m) => (
-                        <option key={`code-${m.id}`} value={m.item_code}>
-                          {m.item_name}
+                        <option key={m.id} value={m.item_code || m.item_name}>
+                          {m.item_name || ""}
                         </option>
                       ))}
                     </datalist>
                   </td>
                   <td>
                     <input
-                      list={`items-list-${idx}`}
-                      value={item.description}
+                      list={`desc-${idx}`}
+                      value={item.description || ""}
                       onChange={(e) =>
                         updateItem(idx, "description", e.target.value)
                       }
                       className={styles.tableInput}
-                      placeholder="Enter Item Description"
                       disabled={isLoadingItems}
                     />
-                    <datalist id={`items-list-${idx}`}>
+                    <datalist id={`desc-${idx}`}>
                       {matchingDesc.map((m) => (
-                        <option key={`desc-${m.id}`} value={m.item_name}>
-                          {m.item_code}
+                        <option key={m.id} value={m.item_name || m.item_code}>
+                          {m.item_code || ""}
                         </option>
                       ))}
                     </datalist>
@@ -723,7 +684,6 @@ export default function CreateQuotation() {
                         updateItem(idx, "quantity", e.target.value)
                       }
                       className={styles.tableInput}
-                      placeholder="0"
                     />
                   </td>
                   <td>
@@ -732,7 +692,6 @@ export default function CreateQuotation() {
                       value={item.rate ?? ""}
                       onChange={(e) => updateItem(idx, "rate", e.target.value)}
                       className={styles.tableInput}
-                      placeholder="0.00"
                     />
                   </td>
                   <td>
@@ -743,25 +702,20 @@ export default function CreateQuotation() {
                         updateItem(idx, "discount", e.target.value)
                       }
                       className={styles.tableInput}
-                      placeholder="%"
                     />
                   </td>
-                  <td
-                    style={{
-                      verticalAlign: "middle",
-                      fontWeight: "600",
-                      color: "#111827",
-                    }}
-                  >
-                    ₹{item.amount.toFixed(2)}
+                  <td style={{ fontWeight: "600" }}>
+                    ₹
+                    {item.amount.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                    })}
                   </td>
-                  <td style={{ verticalAlign: "middle", textAlign: "center" }}>
+                  <td>
                     <button
                       onClick={() =>
                         setItems(items.filter((_, i) => i !== idx))
                       }
                       className={styles.deleteBtn}
-                      title="Remove Item"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -775,11 +729,21 @@ export default function CreateQuotation() {
 
       <button
         onClick={() =>
-          setItems([...items, { description: "", item_code: "", amount: 0 }])
+          setItems([
+            ...items,
+            {
+              description: "",
+              item_code: "",
+              quantity: null,
+              rate: null,
+              discount: null,
+              amount: 0,
+            },
+          ])
         }
         className={styles.addItemBtn}
       >
-        <Plus size={18} /> Add New Row
+        <Plus size={18} /> Add Row
       </button>
 
       <div style={{ marginTop: "20px" }}>
@@ -791,7 +755,7 @@ export default function CreateQuotation() {
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           className={styles.input}
-          style={{ width: "100%", marginTop: "5px", resize: "vertical" }}
+          style={{ width: "100%", marginTop: "5px" }}
         />
       </div>
 
@@ -799,15 +763,30 @@ export default function CreateQuotation() {
         <div className={styles.totals}>
           <div className={styles.totalRow}>
             <span>Subtotal</span>
-            <span style={{ fontWeight: "600" }}>₹ {subTotal.toFixed(2)}</span>
+            <span>
+              ₹
+              {subTotal.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}
+            </span>
           </div>
           <div className={styles.totalRow}>
-            <span>Tax (Approx 18%)</span>
-            <span style={{ fontWeight: "600" }}>₹ {taxAmount.toFixed(2)}</span>
+            <span>Tax (18%)</span>
+            <span>
+              ₹
+              {taxAmount.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}
+            </span>
           </div>
           <div className={styles.grandTotal}>
             <span>Grand Total</span>
-            <span>₹ {grandTotal.toFixed(2)}</span>
+            <span>
+              ₹
+              {grandTotal.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}
+            </span>
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { getNextQuotationNumber } from "../../components/quotationUtils";
 import {
@@ -19,10 +19,17 @@ const CGST_PERCENT = 9;
 const SGST_PERCENT = 9;
 const IGST_PERCENT = 18;
 
+// ✅ Shared cache prevents 41k fetch freeze when users navigate back and forth
+let globalItemsCache = null;
+
 export default function CreateQuotationUser() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const isEditMode = Boolean(id);
+  const location = useLocation();
+
+  // ✅ Detect Edit vs Revise Mode
+  const isReviseMode = Boolean(id) && location.pathname.includes("/revise/");
+  const isEditMode = Boolean(id) && location.pathname.includes("/edit/");
 
   const [quoteNo, setQuoteNo] = useState("");
   const [companies, setCompanies] = useState([]);
@@ -30,8 +37,6 @@ export default function CreateQuotationUser() {
   const [companySearch, setCompanySearch] = useState("");
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
   const [attn, setAttn] = useState("");
-
-  // ✅ ADDED: Mode of Enquiry
   const [modeOfEnquiry, setModeOfEnquiry] = useState("");
 
   const [saving, setSaving] = useState(false);
@@ -46,8 +51,8 @@ export default function CreateQuotationUser() {
     "THANK YOU FOR BEING OUR PRIVILEGED CUSTOMER",
   );
 
-  // ✅ ADDED: Loading State
   const [isLoadingItems, setIsLoadingItems] = useState(true);
+  const [originalCreatorId, setOriginalCreatorId] = useState(null);
 
   const [items, setItems] = useState([
     {
@@ -74,13 +79,21 @@ export default function CreateQuotationUser() {
         const {
           data: { user },
         } = await supabase.auth.getUser();
+
         if (quote.created_by !== user.id) {
-          alert("Unauthorized access.");
+          alert("Unauthorized access. You can only view your own quotes.");
           navigate("/user/dashboard");
           return;
         }
 
-        if (quote.status === "APPROVED") {
+        // ✅ If it's old, block Editing but ALLOW Revising
+        if (!quote.is_latest && isEditMode) {
+          alert("This is an old revision and cannot be edited.");
+          navigate("/user/dashboard");
+          return;
+        }
+
+        if (quote.status === "APPROVED" && isEditMode) {
           alert("This quotation is already Approved and cannot be edited.");
           navigate("/user/dashboard");
           return;
@@ -92,12 +105,13 @@ export default function CreateQuotationUser() {
         setValidFor(quote.valid_for || "");
         setDeliveryTime(quote.delivery_time || "");
         setPaymentTerms(quote.payment_terms || "");
-
-        // ✅ Load Mode of Enquiry
         setModeOfEnquiry(quote.mode_of_enquiry || "");
-
-        setQuotationDate(quote.quotation_date);
+        setQuotationDate(
+          quote.quotation_date || new Date().toISOString().split("T")[0],
+        );
         if (quote.notes) setNotes(quote.notes);
+
+        setOriginalCreatorId(quote.created_by);
 
         const { data: qItems, error: iError } = await supabase
           .from("quotation_items")
@@ -115,78 +129,121 @@ export default function CreateQuotationUser() {
         navigate("/user/dashboard");
       }
     },
-    [navigate],
+    [navigate, isEditMode],
   );
 
   useEffect(() => {
-    async function init() {
-      setIsLoadingItems(true); // Start loading
+    let isMounted = true;
 
+    async function loadInstantData() {
       const { data: compData } = await supabase
         .from("companies")
         .select("id, company_name")
         .order("company_name");
-      setCompanies(compData || []);
 
-      // ==========================================
-      // ✅ 1. FORCE FETCH EVERY SINGLE ITEM (41k+ Loop)
-      // ==========================================
-      let allItems = [];
-      let fromRow = 0;
-      const stepSize = 10000;
-      let keepFetching = true;
+      if (isMounted) setCompanies(compData || []);
 
-      while (keepFetching) {
-        const { data, error } = await supabase
-          .from("items")
-          .select("id, item_name, rate, item_code")
-          .range(fromRow, fromRow + stepSize - 1)
-          .order("item_name");
-
-        if (error) {
-          console.error("DEBUG - Fetch Error:", error);
-          break;
-        }
-
-        if (data && data.length > 0) {
-          allItems = [...allItems, ...data];
-          fromRow += stepSize;
-          if (data.length < stepSize) {
-            keepFetching = false;
-          }
-        } else {
-          keepFetching = false;
-        }
-      }
-
-      // ✅ 2. Aggressive Data Cleaning
-      const cleanedItems = allItems.map((item) => ({
-        ...item,
-        item_code: item.item_code
-          ? String(item.item_code)
-              .replace(/[\r\n\t]+/g, "")
-              .trim()
-          : "",
-        item_name: item.item_name
-          ? String(item.item_name)
-              .replace(/[\r\n\t]+/g, "")
-              .trim()
-          : "",
-        rate: Number(item.rate) || 0,
-      }));
-
-      setItemsMaster(cleanedItems);
-      setIsLoadingItems(false); // Stop loading
-
-      if (isEditMode) {
+      if ((isEditMode || isReviseMode) && isMounted) {
         await loadQuotationForEdit(id);
-      } else {
+      } else if (isMounted) {
         const quotationNo = await getNextQuotationNumber(supabase);
         setQuoteNo(quotationNo);
       }
     }
-    init();
-  }, [id, isEditMode, loadQuotationForEdit]);
+
+    async function loadMassiveItemDatabase() {
+      if (!isMounted) return;
+      setIsLoadingItems(true);
+
+      if (globalItemsCache) {
+        setItemsMaster(globalItemsCache);
+        setIsLoadingItems(false);
+        return;
+      }
+
+      try {
+        const savedCache = localStorage.getItem("erp_master_items");
+        if (savedCache) {
+          const parsedCache = JSON.parse(savedCache);
+          globalItemsCache = parsedCache;
+          if (isMounted) {
+            setItemsMaster(parsedCache);
+            setIsLoadingItems(false);
+          }
+        }
+      } catch {
+        console.warn("Local cache empty");
+      }
+
+      try {
+        const { count } = await supabase
+          .from("items")
+          .select("*", { count: "exact", head: true });
+
+        if (!count) return;
+
+        let allItems = [];
+        const stepSize = 10000;
+        const fetchPromises = [];
+
+        for (let fromRow = 0; fromRow < count; fromRow += stepSize) {
+          fetchPromises.push(
+            supabase
+              .from("items")
+              .select("id, item_name, rate, item_code")
+              .range(fromRow, fromRow + stepSize - 1),
+          );
+        }
+
+        const results = await Promise.all(fetchPromises);
+        results.forEach((res) => {
+          if (res.data) allItems.push(...res.data);
+        });
+
+        const cleanedItems = allItems.map((item) => ({
+          ...item,
+          item_code: item.item_code
+            ? String(item.item_code)
+                .replace(/[\r\n\t]+/g, "")
+                .trim()
+            : "",
+          item_name: item.item_name
+            ? String(item.item_name)
+                .replace(/[\r\n\t]+/g, "")
+                .trim()
+            : "",
+          rate: Number(item.rate) || 0,
+        }));
+
+        globalItemsCache = cleanedItems;
+        if (isMounted) {
+          setItemsMaster(cleanedItems);
+          setIsLoadingItems(false);
+        }
+
+        try {
+          localStorage.setItem(
+            "erp_master_items",
+            JSON.stringify(cleanedItems),
+          );
+        } catch {
+          // ignore quota limits
+        }
+      } catch (err) {
+        console.error("Background fetch failed", err);
+      }
+    }
+
+    loadInstantData();
+    const deferTimer = setTimeout(() => {
+      loadMassiveItemDatabase();
+    }, 300);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(deferTimer);
+    };
+  }, [id, isEditMode, isReviseMode, loadQuotationForEdit]);
 
   const subTotal = useMemo(
     () => items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
@@ -201,36 +258,30 @@ export default function CreateQuotationUser() {
     updated[index][field] = value;
     const safeValue = value ? String(value).trim().toLowerCase() : "";
 
-    // ✅ Match by Code
+    // ✅ SMART UPDATE: Check both Code and Name instantly
     if (field === "item_code" && safeValue) {
       const matched = itemsMaster.find(
-        (m) => m.item_code && m.item_code.toLowerCase() === safeValue,
+        (m) =>
+          (m.item_code && m.item_code.toLowerCase() === safeValue) ||
+          (m.item_name && m.item_name.toLowerCase() === safeValue),
       );
       if (matched) {
-        updated[index].item_code = matched.item_code;
-        updated[index].description = matched.item_name;
-        updated[index].rate = matched.rate;
-      } else {
-        const isOldDesc = itemsMaster.some(
-          (m) => m.item_name === updated[index].description,
-        );
-        if (isOldDesc) {
-          updated[index].description = "";
-          updated[index].rate = "";
-        }
+        updated[index].item_code = matched.item_code || "";
+        updated[index].description = matched.item_name || "";
+        updated[index].rate = matched.rate || 0;
       }
     }
 
-    // ✅ Match by Description
     if (field === "description" && safeValue) {
       const matched = itemsMaster.find(
-        (m) => m.item_name && m.item_name.toLowerCase() === safeValue,
+        (m) =>
+          (m.item_name && m.item_name.toLowerCase() === safeValue) ||
+          (m.item_code && m.item_code.toLowerCase() === safeValue),
       );
       if (matched) {
-        updated[index].rate = matched.rate ?? "";
-        if (!updated[index].item_code) {
-          updated[index].item_code = matched.item_code || "";
-        }
+        updated[index].item_code = matched.item_code || "";
+        updated[index].description = matched.item_name || "";
+        updated[index].rate = matched.rate || 0;
       }
     }
 
@@ -254,6 +305,7 @@ export default function CreateQuotationUser() {
       },
     ]);
   }
+
   function removeItemRow(index) {
     if (items.length > 1) setItems(items.filter((_, i) => i !== index));
   }
@@ -270,6 +322,7 @@ export default function CreateQuotationUser() {
         data: { user },
       } = await supabase.auth.getUser();
 
+      // Automatically attach user's employee record
       const { data: employeeRecord, error: empErr } = await supabase
         .from("employees")
         .select("id")
@@ -282,6 +335,7 @@ export default function CreateQuotationUser() {
         return;
       }
 
+      // Handle new custom items
       const newItemsToSave = [];
       items.forEach((row) => {
         if (!row.description.trim()) return;
@@ -318,50 +372,79 @@ export default function CreateQuotationUser() {
       }
       const finalTotal = subTotal + cgst + sgst + igst;
 
+      const creatorToSave =
+        isEditMode || isReviseMode ? originalCreatorId || user.id : user.id;
+
       const quoteData = {
         quotation_number: quoteNo,
         quotation_date: quotationDate,
         company_id: companyId,
         attn_person_name: attn,
         authorised_signatory_id: employeeRecord.id,
-        created_by: user.id,
+        created_by: creatorToSave,
         valid_for: validFor,
         delivery_time: deliveryTime,
         payment_terms: paymentTerms,
-
-        // ✅ Save Mode of Enquiry
         mode_of_enquiry: modeOfEnquiry,
-
         subtotal: subTotal,
         cgst_amount: cgst,
         sgst_amount: sgst,
         igst_amount: igst,
         total_amount: finalTotal,
         notes: notes,
+        is_latest: true,
       };
 
-      let currentQuoteId = id;
+      let finalId = null;
 
-      if (isEditMode) {
+      // ✅ REVISE VS EDIT LOGIC
+      if (isReviseMode) {
+        const { data: oldQuote } = await supabase
+          .from("quotations")
+          .select("revision_no, parent_quotation_id, id, created_by")
+          .eq("id", id)
+          .single();
+
+        await supabase
+          .from("quotations")
+          .update({ is_latest: false })
+          .eq("id", id);
+
+        const { data: newQuote, error } = await supabase
+          .from("quotations")
+          .insert([
+            {
+              ...quoteData,
+              revision_no: (oldQuote.revision_no || 0) + 1,
+              parent_quotation_id: oldQuote.parent_quotation_id || oldQuote.id,
+              created_by: oldQuote.created_by,
+            },
+          ])
+          .select()
+          .single();
+        if (error) throw error;
+        finalId = newQuote.id;
+      } else if (isEditMode) {
         const { error } = await supabase
           .from("quotations")
           .update(quoteData)
           .eq("id", id);
         if (error) throw error;
+        finalId = id;
 
         await supabase.from("quotation_items").delete().eq("quotation_id", id);
       } else {
         const { data, error } = await supabase
           .from("quotations")
-          .insert([{ ...quoteData, revision_no: 0, is_latest: true }])
+          .insert([{ ...quoteData, revision_no: 0 }])
           .select()
           .single();
         if (error) throw error;
-        currentQuoteId = data.id;
+        finalId = data.id;
       }
 
       const itemsToInsert = items.map((item) => ({
-        quotation_id: currentQuoteId,
+        quotation_id: finalId,
         item_code: item.item_code || null,
         description: item.description,
         quantity: item.quantity,
@@ -375,7 +458,7 @@ export default function CreateQuotationUser() {
         .insert(itemsToInsert);
       if (itemError) throw itemError;
 
-      navigate(`/user/quotations/${currentQuoteId}`);
+      navigate(`/user/quotations/${finalId}`);
     } catch (err) {
       console.error(err);
       alert("Error saving: " + err.message);
@@ -402,9 +485,12 @@ export default function CreateQuotationUser() {
       <div className={styles.header}>
         <div>
           <h1 className={styles.title}>
-            {isEditMode ? "Edit Draft" : "New Quotation"}
+            {isReviseMode
+              ? "Create Revision"
+              : isEditMode
+                ? "Edit Quotation"
+                : "New Quotation"}
           </h1>
-          {/* ✅ Loading Indicator */}
           <span
             style={{
               color: isLoadingItems ? "#d97706" : "#16a34a",
@@ -418,8 +504,8 @@ export default function CreateQuotationUser() {
           >
             {isLoadingItems ? (
               <>
-                <Loader2 className="spin-anim" size={14} /> Fetching database...
-                Please wait
+                <Loader2 className="spin-anim" size={14} /> Fetching 41K Item
+                DB...
               </>
             ) : (
               `✅ Ready: ${itemsMaster.length} items loaded`
@@ -571,7 +657,6 @@ export default function CreateQuotationUser() {
           />
         </div>
 
-        {/* ✅ ADDED: Mode of Enquiry Field */}
         <div className={styles.fieldGroup}>
           <label className={styles.label}>Mode of Enquiry</label>
           <input
@@ -599,27 +684,33 @@ export default function CreateQuotationUser() {
           </thead>
           <tbody>
             {items.map((item, idx) => {
-              // ✅ 3. SMART SEARCH (Slice 50 items to prevent crash)
-              const matchingCodes = item.item_code
+              // ✅ 3. SMART SEARCH BEFORE SLICING
+              const searchCode = item.item_code
+                ? item.item_code.toLowerCase()
+                : "";
+              const matchingCodes = searchCode
                 ? itemsMaster
                     .filter(
                       (m) =>
-                        m.item_code &&
-                        m.item_code
-                          .toLowerCase()
-                          .includes(item.item_code.toLowerCase()),
+                        (m.item_code &&
+                          m.item_code.toLowerCase().includes(searchCode)) ||
+                        (m.item_name &&
+                          m.item_name.toLowerCase().includes(searchCode)),
                     )
                     .slice(0, 50)
                 : itemsMaster.slice(0, 50);
 
-              const matchingDesc = item.description
+              const searchDesc = item.description
+                ? item.description.toLowerCase()
+                : "";
+              const matchingDesc = searchDesc
                 ? itemsMaster
                     .filter(
                       (m) =>
-                        m.item_name &&
-                        m.item_name
-                          .toLowerCase()
-                          .includes(item.description.toLowerCase()),
+                        (m.item_name &&
+                          m.item_name.toLowerCase().includes(searchDesc)) ||
+                        (m.item_code &&
+                          m.item_code.toLowerCase().includes(searchDesc)),
                     )
                     .slice(0, 50)
                 : itemsMaster.slice(0, 50);
@@ -640,8 +731,11 @@ export default function CreateQuotationUser() {
                     />
                     <datalist id={`codes-list-user-${idx}`}>
                       {matchingCodes.map((m) => (
-                        <option key={`code-${m.id}`} value={m.item_code}>
-                          {m.item_name}
+                        <option
+                          key={`code-${m.id}`}
+                          value={m.item_code || m.item_name}
+                        >
+                          {m.item_name || ""}
                         </option>
                       ))}
                     </datalist>
@@ -650,7 +744,7 @@ export default function CreateQuotationUser() {
                     <input
                       list={`items-list-user-${idx}`}
                       placeholder="Type item name"
-                      value={item.description}
+                      value={item.description || ""}
                       onChange={(e) =>
                         updateItem(idx, "description", e.target.value)
                       }
@@ -659,8 +753,11 @@ export default function CreateQuotationUser() {
                     />
                     <datalist id={`items-list-user-${idx}`}>
                       {matchingDesc.map((m) => (
-                        <option key={`desc-${m.id}`} value={m.item_name}>
-                          {m.item_code}
+                        <option
+                          key={`desc-${m.id}`}
+                          value={m.item_name || m.item_code}
+                        >
+                          {m.item_code || ""}
                         </option>
                       ))}
                     </datalist>

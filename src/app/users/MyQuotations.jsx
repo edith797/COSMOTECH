@@ -1,13 +1,26 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
-import { Plus, FileText, Search, Eye, History } from "lucide-react";
+import {
+  Plus,
+  FileText,
+  Search,
+  Eye,
+  History,
+  Edit,
+  FilePlus,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import styles from "../admin/AllQuotations.module.css";
+
+const ITEMS_PER_PAGE = 20;
 
 export default function MyQuotations() {
   const [quotes, setQuotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -44,13 +57,24 @@ export default function MyQuotations() {
     );
   }, [quotes, searchTerm]);
 
+  // ✅ Reset to page 1 when searching
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  // ✅ Pagination Logic
+  const totalPages = Math.ceil(filteredQuotes.length / ITEMS_PER_PAGE) || 1;
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const currentQuotes = filteredQuotes.slice(
+    startIndex,
+    startIndex + ITEMS_PER_PAGE,
+  );
+
   const getStatusColor = (status) => {
     if (status === "APPROVED") return "#10B981";
     if (status === "REJECTED") return "#EF4444";
     return "#F59E0B";
   };
-
-  // ✅ handleDelete function removed - Users cannot delete quotes anymore!
 
   return (
     <div className={styles.container}>
@@ -82,128 +106,199 @@ export default function MyQuotations() {
       {loading ? (
         <p>Loading...</p>
       ) : (
-        <div className={styles.tableContainer}>
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th className={styles.th}>Quote No</th>
-                <th className={styles.th}>Date</th>
-                <th className={styles.th}>Status</th>
-                <th className={styles.th}>Total</th>
-                <th className={styles.th} style={{ textAlign: "right" }}>
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredQuotes.map((q) => (
-                <tr
-                  key={q.id}
-                  className={styles.tr}
-                  onClick={() => navigate(`/user/quotations/${q.id}`)}
-                  // Dim old history items slightly
-                  style={{ cursor: "pointer", opacity: q.is_latest ? 1 : 0.6 }}
-                >
-                  <td className={styles.td}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                      }}
-                    >
-                      {/* Icon changes based on if it's latest or history */}
-                      {q.is_latest ? (
-                        <FileText size={16} color="#3B82F6" />
-                      ) : (
-                        <History size={16} color="#6B7280" />
-                      )}
-
-                      <b>{q.quotation_number}</b>
-
-                      {/* Revision Badge */}
-                      {q.revision_no > 0 && (
-                        <span
-                          style={{
-                            fontSize: "10px",
-                            background: "#eee",
-                            padding: "2px 4px",
-                            borderRadius: "4px",
-                          }}
-                        >
-                          Rev-{q.revision_no}
-                        </span>
-                      )}
-
-                      {/* History Badge */}
-                      {!q.is_latest && (
-                        <span
-                          style={{
-                            fontSize: "9px",
-                            border: "1px solid #FCD34D",
-                            color: "#B45309",
-                            backgroundColor: "#FEF3C7",
-                            padding: "1px 4px",
-                            borderRadius: "3px",
-                          }}
-                        >
-                          HISTORY
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className={styles.td}>
-                    {new Date(q.quotation_date).toLocaleDateString("en-IN")}
-                  </td>
-                  <td className={styles.td}>
-                    <span
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: "12px",
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        backgroundColor: `${getStatusColor(q.status)}20`,
-                        color: getStatusColor(q.status),
-                      }}
-                    >
-                      {q.status || "DRAFT"}
-                    </span>
-                  </td>
-                  <td className={styles.td}>
-                    ₹ {Number(q.total_amount).toLocaleString("en-IN")}
-                  </td>
-                  <td className={styles.td} style={{ textAlign: "right" }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "10px",
-                        justifyContent: "flex-end",
-                      }}
-                    >
-                      {/* View Button */}
-                      <button
-                        title="View Quotation"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/user/quotations/${q.id}`);
-                        }}
-                        style={{
-                          border: "none",
-                          background: "transparent",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <Eye size={18} color="#6B7280" />
-                      </button>
-
-                      {/* ✅ Trash icon successfully removed */}
-                    </div>
-                  </td>
+        <>
+          <div className={styles.tableContainer}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th className={styles.th}>Quote No</th>
+                  <th className={styles.th}>Date</th>
+                  <th className={styles.th}>Status</th>
+                  <th className={styles.th}>Total</th>
+                  <th className={styles.th} style={{ textAlign: "right" }}>
+                    Actions
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {currentQuotes.length > 0 ? (
+                  currentQuotes.map((q) => (
+                    <tr
+                      key={q.id}
+                      className={styles.tr}
+                      onClick={() => navigate(`/user/quotations/${q.id}`)}
+                      // Dim old history items slightly
+                      style={{
+                        cursor: "pointer",
+                        opacity: q.is_latest ? 1 : 0.6,
+                      }}
+                    >
+                      <td className={styles.td}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          {/* Icon changes based on if it's latest or history */}
+                          {q.is_latest ? (
+                            <FileText size={16} color="#475569" />
+                          ) : (
+                            <History size={16} color="#94a3b8" />
+                          )}
+
+                          <span style={{ fontWeight: 600, color: "#0f172a" }}>
+                            {q.quotation_number}
+                          </span>
+
+                          {/* Revision Badge */}
+                          {q.revision_no > 0 && (
+                            <span
+                              style={{
+                                fontSize: "10px",
+                                backgroundColor: "#f1f5f9",
+                                padding: "3px 6px",
+                                borderRadius: "4px",
+                                color: "#475569",
+                                fontWeight: "700",
+                                border: "1px solid #e2e8f0",
+                              }}
+                            >
+                              Rev-{q.revision_no}
+                            </span>
+                          )}
+
+                          {/* History Badge */}
+                          {!q.is_latest && (
+                            <span
+                              style={{
+                                fontSize: "9px",
+                                backgroundColor: "#fffbeb",
+                                color: "#d97706",
+                                padding: "3px 6px",
+                                borderRadius: "4px",
+                                border: "1px solid #fde68a",
+                                fontWeight: "700",
+                                letterSpacing: "0.5px",
+                              }}
+                            >
+                              HISTORY
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className={styles.td} style={{ color: "#64748b" }}>
+                        {new Date(q.quotation_date).toLocaleDateString("en-IN")}
+                      </td>
+                      <td className={styles.td}>
+                        <span
+                          style={{
+                            padding: "4px 8px",
+                            borderRadius: "12px",
+                            fontSize: "12px",
+                            fontWeight: "700",
+                            backgroundColor: `${getStatusColor(q.status)}15`,
+                            color: getStatusColor(q.status),
+                          }}
+                        >
+                          {q.status || "DRAFT"}
+                        </span>
+                      </td>
+                      <td
+                        className={styles.td}
+                        style={{ fontWeight: 700, color: "#0f172a" }}
+                      >
+                        ₹ {Number(q.total_amount).toLocaleString("en-IN")}
+                      </td>
+                      <td className={styles.td}>
+                        <div
+                          className={styles.actionsCell}
+                          style={{ justifyContent: "flex-end" }}
+                        >
+                          {/* 1. VIEW BUTTON */}
+                          <button
+                            title="View Quotation"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/user/quotations/${q.id}`);
+                            }}
+                            className={styles.actionBtn}
+                          >
+                            <Eye size={16} color="#6B7280" />
+                          </button>
+
+                          {/* ✅ 2. NORMAL EDIT (Pencil - Updates same record) */}
+                          {q.is_latest && (
+                            <button
+                              className={styles.actionBtn}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/user/quotations/edit/${q.id}`);
+                              }}
+                              title="Edit Quotation"
+                            >
+                              <Edit size={16} color="#3b82f6" />
+                            </button>
+                          )}
+
+                          {/* ✅ 3. CREATE REVISION (FilePlus - Creates new record, only if rev < 1) */}
+                          {q.is_latest && q.revision_no < 1 && (
+                            <button
+                              className={styles.actionBtn}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/user/quotations/revise/${q.id}`);
+                              }}
+                              title="Create New Revision"
+                            >
+                              <FilePlus size={16} color="#8b5cf6" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="5">
+                      <div className={styles.emptyState}>
+                        No quotations found.
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ✅ PAGINATION CONTROLS */}
+          {totalPages > 1 && (
+            <div className={styles.paginationContainer}>
+              <button
+                className={styles.pageButton}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft size={16} /> Previous
+              </button>
+
+              <span className={styles.pageText}>
+                Page {currentPage} of {totalPages}
+              </span>
+
+              <button
+                className={styles.pageButton}
+                onClick={() =>
+                  setCurrentPage((p) => Math.min(totalPages, p + 1))
+                }
+                disabled={currentPage === totalPages}
+              >
+                Next <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

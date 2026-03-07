@@ -12,8 +12,12 @@ import {
   Plus,
   Trash2,
   FileText,
+  Eye, // ✅ Imported Eye icon for the Preview button
 } from "lucide-react";
-import styles from "../users/CreateQuotation.module.css"; // Reuse shared CSS
+import styles from "../users/CreateQuotation.module.css";
+
+// ✅ Import the Preview Component (Adjust path if needed)
+import QuotationPreview from "../admin/QuotationPreview";
 
 const CGST_PERCENT = 9;
 const SGST_PERCENT = 9;
@@ -41,6 +45,10 @@ export default function CreateQuotationUser() {
 
   const [saving, setSaving] = useState(false);
   const [itemsMaster, setItemsMaster] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [isLoadingItems, setIsLoadingItems] = useState(true);
+
+  const [signatoryId, setSignatoryId] = useState("");
   const [validFor, setValidFor] = useState("ONE MONTH");
   const [deliveryTime, setDeliveryTime] = useState("1-2 WEEKS");
   const [paymentTerms, setPaymentTerms] = useState("15 DAYS");
@@ -51,8 +59,11 @@ export default function CreateQuotationUser() {
     "THANK YOU FOR BEING OUR PRIVILEGED CUSTOMER",
   );
 
-  const [isLoadingItems, setIsLoadingItems] = useState(true);
   const [originalCreatorId, setOriginalCreatorId] = useState(null);
+
+  // ✅ New States for Preview Logic
+  const [currentRevisionNo, setCurrentRevisionNo] = useState(0);
+  const [previewDraftData, setPreviewDraftData] = useState(null);
 
   const [items, setItems] = useState([
     {
@@ -102,6 +113,7 @@ export default function CreateQuotationUser() {
         setQuoteNo(quote.quotation_number);
         setCompanyId(quote.company_id);
         setAttn(quote.attn_person_name || "");
+        setSignatoryId(quote.authorised_signatory_id || "");
         setValidFor(quote.valid_for || "");
         setDeliveryTime(quote.delivery_time || "");
         setPaymentTerms(quote.payment_terms || "");
@@ -112,11 +124,14 @@ export default function CreateQuotationUser() {
         if (quote.notes) setNotes(quote.notes);
 
         setOriginalCreatorId(quote.created_by);
+        setCurrentRevisionNo(quote.revision_no || 0); // ✅ Capture revision for preview
 
+        // ✅ FIXED: Added .order("id", { ascending: true }) to prevent row randomization
         const { data: qItems, error: iError } = await supabase
           .from("quotation_items")
           .select("*")
-          .eq("quotation_id", quoteId);
+          .eq("quotation_id", quoteId)
+          .order("id", { ascending: true });
 
         if (iError) throw iError;
 
@@ -136,12 +151,29 @@ export default function CreateQuotationUser() {
     let isMounted = true;
 
     async function loadInstantData() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       const { data: compData } = await supabase
         .from("companies")
         .select("id, company_name")
         .order("company_name");
 
       if (isMounted) setCompanies(compData || []);
+
+      const { data: empData } = await supabase
+        .from("employees")
+        .select("id, full_name, user_id")
+        .eq("is_active", true)
+        .order("full_name");
+
+      if (isMounted) setEmployees(empData || []);
+
+      if (!isEditMode && !isReviseMode && user && empData && isMounted) {
+        const myEmployeeRecord = empData.find((emp) => emp.user_id === user.id);
+        if (myEmployeeRecord) setSignatoryId(myEmployeeRecord.id);
+      }
 
       if ((isEditMode || isReviseMode) && isMounted) {
         await loadQuotationForEdit(id);
@@ -250,6 +282,209 @@ export default function CreateQuotationUser() {
     [items],
   );
 
+  // ✅ PREVIEW LOGIC: Pack data into a fake database object
+  function handleTriggerPreview() {
+    if (!companyId) return alert("Please select a company");
+    if (!signatoryId) return alert("Please select an Authorised Signatory.");
+    if (isLoadingItems)
+      return alert("Please wait for items to load completely.");
+
+    // Calculate accurate taxes for preview
+    const selectedComp = companies.find((c) => c.id === companyId);
+    let cgst = 0,
+      sgst = 0,
+      igst = 0;
+    if (selectedComp?.gst_type === "INTER") {
+      igst = (subTotal * IGST_PERCENT) / 100;
+    } else {
+      cgst = (subTotal * CGST_PERCENT) / 100;
+      sgst = (subTotal * SGST_PERCENT) / 100;
+    }
+    const finalTotal = subTotal + cgst + sgst + igst;
+
+    const draft = {
+      quotation: {
+        quotation_number: quoteNo,
+        quotation_date: quotationDate,
+        company_id: companyId,
+        attn_person_name: attn,
+        authorised_signatory_id: signatoryId,
+        valid_for: validFor,
+        delivery_time: deliveryTime,
+        payment_terms: paymentTerms,
+        mode_of_enquiry: modeOfEnquiry,
+        subtotal: subTotal,
+        cgst_amount: cgst,
+        sgst_amount: sgst,
+        igst_amount: igst,
+        total_amount: finalTotal,
+        notes: notes,
+        revision_no: isReviseMode ? currentRevisionNo + 1 : currentRevisionNo,
+      },
+      items: items.filter(
+        (item) => item.description && item.description.trim() !== "",
+      ),
+    };
+
+    setPreviewDraftData(draft); // This opens the modal!
+  }
+
+  // ✅ THIS ONLY RUNS WHEN THEY CLICK "CONFIRM" IN THE PREVIEW
+  async function executeRealSave() {
+    setPreviewDraftData(null); // Close the preview modal
+    setSaving(true);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      const { data: employeeRecord, error: empErr } = await supabase
+        .from("employees")
+        .select("id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (empErr || !employeeRecord) {
+        alert("Error: You are not registered as an Employee.");
+        setSaving(false);
+        return;
+      }
+
+      const newItemsToSave = [];
+      items.forEach((row) => {
+        if (!row.description.trim()) return;
+        const exists = itemsMaster.some((m) => {
+          if (row.item_code && row.item_code.trim() !== "")
+            return m.item_code === row.item_code;
+          return m.item_name.toLowerCase() === row.description.toLowerCase();
+        });
+        if (!exists) {
+          newItemsToSave.push({
+            item_name: row.description,
+            rate: row.rate,
+            item_code: row.item_code || null,
+          });
+        }
+      });
+      if (newItemsToSave.length > 0)
+        await supabase.from("items").insert(newItemsToSave);
+
+      const { data: selectedComp } = await supabase
+        .from("companies")
+        .select("gst_type")
+        .eq("id", companyId)
+        .single();
+
+      let cgst = 0,
+        sgst = 0,
+        igst = 0;
+      if (selectedComp?.gst_type === "INTER") {
+        igst = subTotal * 0.18;
+      } else {
+        cgst = subTotal * 0.09;
+        sgst = subTotal * 0.09;
+      }
+      const finalTotal = subTotal + cgst + sgst + igst;
+
+      const creatorToSave =
+        isEditMode || isReviseMode ? originalCreatorId || user.id : user.id;
+
+      const quoteData = {
+        quotation_number: quoteNo,
+        quotation_date: quotationDate,
+        company_id: companyId,
+        attn_person_name: attn,
+        authorised_signatory_id: employeeRecord.id,
+        created_by: creatorToSave,
+        valid_for: validFor,
+        delivery_time: deliveryTime,
+        payment_terms: paymentTerms,
+        mode_of_enquiry: modeOfEnquiry,
+        subtotal: subTotal,
+        cgst_amount: cgst,
+        sgst_amount: sgst,
+        igst_amount: igst,
+        total_amount: finalTotal,
+        notes: notes,
+        is_latest: true,
+      };
+
+      let finalId = null;
+
+      if (isReviseMode) {
+        const { data: oldQuote } = await supabase
+          .from("quotations")
+          .select("revision_no, parent_quotation_id, id, created_by")
+          .eq("id", id)
+          .single();
+
+        await supabase
+          .from("quotations")
+          .update({ is_latest: false })
+          .eq("id", id);
+
+        const { data: newQuote, error } = await supabase
+          .from("quotations")
+          .insert([
+            {
+              ...quoteData,
+              revision_no: (oldQuote.revision_no || 0) + 1,
+              parent_quotation_id: oldQuote.parent_quotation_id || oldQuote.id,
+              created_by: oldQuote.created_by,
+            },
+          ])
+          .select()
+          .single();
+        if (error) throw error;
+        finalId = newQuote.id;
+      } else if (isEditMode) {
+        const { error } = await supabase
+          .from("quotations")
+          .update(quoteData)
+          .eq("id", id);
+        if (error) throw error;
+        finalId = id;
+
+        await supabase.from("quotation_items").delete().eq("quotation_id", id);
+      } else {
+        const { data, error } = await supabase
+          .from("quotations")
+          .insert([{ ...quoteData, revision_no: 0 }])
+          .select()
+          .single();
+        if (error) throw error;
+        finalId = data.id;
+      }
+
+      const itemsToInsert = items
+        .filter((i) => i.description.trim() !== "")
+        .map((item) => ({
+          quotation_id: finalId,
+          item_code: item.item_code || null,
+          description: item.description,
+          quantity: item.quantity,
+          rate: item.rate,
+          discount: item.discount,
+          amount: item.amount,
+        }));
+
+      if (itemsToInsert.length > 0) {
+        const { error: itemError } = await supabase
+          .from("quotation_items")
+          .insert(itemsToInsert);
+        if (itemError) throw itemError;
+      }
+
+      navigate(`/user/quotations/${finalId}`);
+    } catch (err) {
+      console.error(err);
+      alert("Error saving: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const taxAmount = useMemo(() => subTotal * 0.18, [subTotal]);
   const grandTotal = useMemo(() => subTotal + taxAmount, [subTotal, taxAmount]);
 
@@ -258,7 +493,6 @@ export default function CreateQuotationUser() {
     updated[index][field] = value;
     const safeValue = value ? String(value).trim().toLowerCase() : "";
 
-    // ✅ SMART UPDATE: Check both Code and Name instantly
     if (field === "item_code" && safeValue) {
       const matched = itemsMaster.find(
         (m) =>
@@ -310,176 +544,6 @@ export default function CreateQuotationUser() {
     if (items.length > 1) setItems(items.filter((_, i) => i !== index));
   }
 
-  async function saveQuotation() {
-    if (!companyId) return alert("Please select a company");
-    if (isLoadingItems)
-      return alert("Please wait for items to load completely.");
-
-    setSaving(true);
-
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      // Automatically attach user's employee record
-      const { data: employeeRecord, error: empErr } = await supabase
-        .from("employees")
-        .select("id")
-        .eq("user_id", user.id)
-        .single();
-
-      if (empErr || !employeeRecord) {
-        alert("Error: You are not registered as an Employee.");
-        setSaving(false);
-        return;
-      }
-
-      // Handle new custom items
-      const newItemsToSave = [];
-      items.forEach((row) => {
-        if (!row.description.trim()) return;
-        const exists = itemsMaster.some((m) => {
-          if (row.item_code && row.item_code.trim() !== "")
-            return m.item_code === row.item_code;
-          return m.item_name.toLowerCase() === row.description.toLowerCase();
-        });
-        if (!exists) {
-          newItemsToSave.push({
-            item_name: row.description,
-            rate: row.rate,
-            item_code: row.item_code || null,
-          });
-        }
-      });
-      if (newItemsToSave.length > 0)
-        await supabase.from("items").insert(newItemsToSave);
-
-      const { data: selectedComp } = await supabase
-        .from("companies")
-        .select("gst_type")
-        .eq("id", companyId)
-        .single();
-
-      let cgst = 0,
-        sgst = 0,
-        igst = 0;
-      if (selectedComp?.gst_type === "INTER") {
-        igst = (subTotal * IGST_PERCENT) / 100;
-      } else {
-        cgst = (subTotal * CGST_PERCENT) / 100;
-        sgst = (subTotal * SGST_PERCENT) / 100;
-      }
-      const finalTotal = subTotal + cgst + sgst + igst;
-
-      const creatorToSave =
-        isEditMode || isReviseMode ? originalCreatorId || user.id : user.id;
-
-      const quoteData = {
-        quotation_number: quoteNo,
-        quotation_date: quotationDate,
-        company_id: companyId,
-        attn_person_name: attn,
-        authorised_signatory_id: employeeRecord.id,
-        created_by: creatorToSave,
-        valid_for: validFor,
-        delivery_time: deliveryTime,
-        payment_terms: paymentTerms,
-        mode_of_enquiry: modeOfEnquiry,
-        subtotal: subTotal,
-        cgst_amount: cgst,
-        sgst_amount: sgst,
-        igst_amount: igst,
-        total_amount: finalTotal,
-        notes: notes,
-        is_latest: true,
-      };
-
-      let finalId = null;
-
-      // ✅ REVISE VS EDIT LOGIC
-      if (isReviseMode) {
-        const { data: oldQuote } = await supabase
-          .from("quotations")
-          .select("revision_no, parent_quotation_id, id, created_by")
-          .eq("id", id)
-          .single();
-
-        await supabase
-          .from("quotations")
-          .update({ is_latest: false })
-          .eq("id", id);
-
-        const { data: newQuote, error } = await supabase
-          .from("quotations")
-          .insert([
-            {
-              ...quoteData,
-              revision_no: (oldQuote.revision_no || 0) + 1,
-              parent_quotation_id: oldQuote.parent_quotation_id || oldQuote.id,
-              created_by: oldQuote.created_by,
-            },
-          ])
-          .select()
-          .single();
-        if (error) throw error;
-        finalId = newQuote.id;
-      } else if (isEditMode) {
-        const { error } = await supabase
-          .from("quotations")
-          .update(quoteData)
-          .eq("id", id);
-        if (error) throw error;
-        finalId = id;
-
-        await supabase.from("quotation_items").delete().eq("quotation_id", id);
-      } else {
-        const { data, error } = await supabase
-          .from("quotations")
-          .insert([{ ...quoteData, revision_no: 0 }])
-          .select()
-          .single();
-        if (error) throw error;
-        finalId = data.id;
-      }
-
-      const itemsToInsert = items.map((item) => ({
-        quotation_id: finalId,
-        item_code: item.item_code || null,
-        description: item.description,
-        quantity: item.quantity,
-        rate: item.rate,
-        discount: item.discount,
-        amount: item.amount,
-      }));
-
-      const { error: itemError } = await supabase
-        .from("quotation_items")
-        .insert(itemsToInsert);
-      if (itemError) throw itemError;
-
-      navigate(`/user/quotations/${finalId}`);
-    } catch (err) {
-      console.error(err);
-      alert("Error saving: " + err.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const filteredCompanies = useMemo(() => {
-    if (!companySearch.trim()) return companies;
-    return companies.filter((c) =>
-      c.company_name.toLowerCase().includes(companySearch.toLowerCase()),
-    );
-  }, [companies, companySearch]);
-
-  function selectCompany(comp) {
-    setCompanyId(comp.id);
-    setCompanySearch(comp.company_name);
-    setShowCompanyDropdown(false);
-  }
-
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -512,24 +576,37 @@ export default function CreateQuotationUser() {
             )}
           </span>
         </div>
-        <div className={styles.actions}>
+
+        {/* ✅ ALIGNED CANCEL & PREVIEW BUTTONS */}
+        <div
+          className={styles.actions}
+          style={{ display: "flex", gap: "10px", alignItems: "center" }}
+        >
           <button
-            onClick={() => navigate("/user/dashboard")}
+            onClick={() => navigate("/user/quotations")}
             className={styles.backBtn}
           >
             Cancel
           </button>
+
           <button
-            onClick={saveQuotation}
+            onClick={handleTriggerPreview}
             disabled={saving || isLoadingItems}
             className={styles.saveBtn}
             style={{
               opacity: saving || isLoadingItems ? 0.5 : 1,
               cursor: saving || isLoadingItems ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
             }}
           >
-            {saving ? <Loader2 className="spin-anim" /> : <Save size={18} />}{" "}
-            {isEditMode ? "Update" : "Save"}
+            {saving ? (
+              <Loader2 className="spin-anim" size={18} />
+            ) : (
+              <Eye size={18} />
+            )}
+            Preview Quotation
           </button>
         </div>
       </div>
@@ -539,87 +616,79 @@ export default function CreateQuotationUser() {
           <label className={styles.label}>
             <Hash size={14} /> Quote No
           </label>
-          <input value={quoteNo} readOnly className={styles.input} />
-        </div>
-        <div className={styles.fieldGroup}>
-          <label className={styles.label}>
-            <Calendar size={14} /> Date
-          </label>
           <input
-            type="date"
-            value={quotationDate}
-            onChange={(e) => setQuotationDate(e.target.value)}
-            className={styles.input}
+            value={quoteNo}
+            readOnly
+            className={`${styles.input} ${styles.readOnly}`}
           />
         </div>
-        <div className={styles.fieldGroup}>
+
+        <div className={styles.fieldGroup} style={{ position: "relative" }}>
           <label className={styles.label}>
             <Building2 size={14} /> Company
           </label>
-          <div style={{ position: "relative" }}>
-            <input
-              type="text"
-              placeholder="Search company..."
-              value={companySearch}
-              onChange={(e) => {
-                setCompanySearch(e.target.value);
-                setShowCompanyDropdown(true);
+          <input
+            type="text"
+            placeholder="Search company..."
+            value={companySearch}
+            onChange={(e) => {
+              setCompanySearch(e.target.value);
+              setShowCompanyDropdown(true);
+            }}
+            onFocus={() => setShowCompanyDropdown(true)}
+            className={styles.input}
+          />
+          {showCompanyDropdown && (
+            <div
+              className={styles.dropdownMenu}
+              style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                right: 0,
+                backgroundColor: "#fff",
+                border: "1px solid #d1d5db",
+                borderTop: "none",
+                borderRadius: "0 0 8px 8px",
+                maxHeight: "200px",
+                overflowY: "auto",
+                zIndex: 10,
               }}
-              onFocus={() => setShowCompanyDropdown(true)}
-              className={styles.input}
-            />
-            {showCompanyDropdown && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "100%",
-                  left: 0,
-                  right: 0,
-                  backgroundColor: "#fff",
-                  border: "1px solid #d1d5db",
-                  borderTop: "none",
-                  borderRadius: "0 0 8px 8px",
-                  maxHeight: "200px",
-                  overflowY: "auto",
-                  zIndex: 10,
-                }}
-              >
-                {filteredCompanies.length > 0 ? (
-                  filteredCompanies.map((comp) => (
-                    <div
-                      key={comp.id}
-                      onClick={() => selectCompany(comp)}
-                      style={{
-                        padding: "10px 12px",
-                        cursor: "pointer",
-                        borderBottom: "1px solid #f3f4f6",
-                        transition: "background-color 0.15s",
-                      }}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.backgroundColor = "#f9fafb")
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.backgroundColor = "#fff")
-                      }
-                    >
-                      {comp.company_name}
-                    </div>
-                  ))
-                ) : (
+            >
+              {companies
+                .filter((c) =>
+                  c.company_name
+                    .toLowerCase()
+                    .includes(companySearch.toLowerCase()),
+                )
+                .map((comp) => (
                   <div
+                    key={comp.id}
+                    onClick={() => {
+                      setCompanyId(comp.id);
+                      setCompanySearch(comp.company_name);
+                      setShowCompanyDropdown(false);
+                    }}
+                    className={styles.dropdownItem}
                     style={{
                       padding: "10px 12px",
-                      color: "#9ca3af",
-                      textAlign: "center",
+                      cursor: "pointer",
+                      borderBottom: "1px solid #f3f4f6",
                     }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.backgroundColor = "#f9fafb")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.backgroundColor = "#fff")
+                    }
                   >
-                    No companies found
+                    {comp.company_name}
                   </div>
-                )}
-              </div>
-            )}
-          </div>
+                ))}
+            </div>
+          )}
         </div>
+
         <div className={styles.fieldGroup}>
           <label className={styles.label}>
             <User size={14} /> Attn
@@ -632,6 +701,26 @@ export default function CreateQuotationUser() {
           />
         </div>
 
+        <div className={styles.fieldGroup}>
+          <label className={styles.label}>
+            Signatory <span style={{ color: "red" }}>*</span>
+          </label>
+          <select
+            value={signatoryId}
+            onChange={(e) => setSignatoryId(e.target.value)}
+            className={styles.select}
+          >
+            <option value="">-- Select Signatory --</option>
+            {employees.map((emp) => (
+              <option key={emp.id} value={emp.id}>
+                {emp.full_name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className={styles.grid}>
         <div className={styles.fieldGroup}>
           <label className={styles.label}>Valid For</label>
           <input
@@ -656,17 +745,28 @@ export default function CreateQuotationUser() {
             className={styles.input}
           />
         </div>
-
         <div className={styles.fieldGroup}>
-          <label className={styles.label}>Mode of Enquiry</label>
+          <label className={styles.label}>
+            <Calendar size={14} /> Date
+          </label>
           <input
-            type="text"
-            placeholder="e.g., Email, Phone, Walk-in..."
-            value={modeOfEnquiry}
-            onChange={(e) => setModeOfEnquiry(e.target.value)}
+            type="date"
+            value={quotationDate}
+            onChange={(e) => setQuotationDate(e.target.value)}
             className={styles.input}
           />
         </div>
+      </div>
+
+      <div className={styles.fieldGroup} style={{ marginBottom: "24px" }}>
+        <label className={styles.label}>Mode of Enquiry</label>
+        <input
+          type="text"
+          placeholder="e.g., Email, Phone, Walk-in..."
+          value={modeOfEnquiry}
+          onChange={(e) => setModeOfEnquiry(e.target.value)}
+          className={styles.input}
+        />
       </div>
 
       <div className={styles.tableWrapper}>
@@ -684,7 +784,6 @@ export default function CreateQuotationUser() {
           </thead>
           <tbody>
             {items.map((item, idx) => {
-              // ✅ 3. SMART SEARCH BEFORE SLICING
               const searchCode = item.item_code
                 ? item.item_code.toLowerCase()
                 : "";
@@ -837,18 +936,42 @@ export default function CreateQuotationUser() {
         <div className={styles.totals}>
           <div className={styles.totalRow}>
             <span>Subtotal</span>
-            <span>₹ {subTotal.toFixed(2)}</span>
+            <span>
+              ₹
+              {subTotal.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}
+            </span>
           </div>
           <div className={styles.totalRow}>
             <span>Tax (Approx 18%)</span>
-            <span>₹ {taxAmount.toFixed(2)}</span>
+            <span>
+              ₹
+              {taxAmount.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}
+            </span>
           </div>
           <div className={styles.grandTotal}>
             <span>Grand Total</span>
-            <span>₹ {grandTotal.toFixed(2)}</span>
+            <span>
+              ₹
+              {grandTotal.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}
+            </span>
           </div>
         </div>
       </div>
+
+      {/* ✅ PREVIEW OVERLAY MODAL */}
+      {previewDraftData && (
+        <QuotationPreview
+          draftData={previewDraftData}
+          onCancelPreview={() => setPreviewDraftData(null)}
+          onConfirmSave={executeRealSave}
+        />
+      )}
     </div>
   );
 }

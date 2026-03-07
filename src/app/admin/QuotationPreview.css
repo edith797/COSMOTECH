@@ -1,14 +1,27 @@
 /* --- Background & Layout --- */
 .quotation-body {
-  background-color: #f1f5f9; /* Soft, clean app background */
+  background-color: #f1f5f9;
   min-height: 100vh;
   padding: 40px 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* Clean, modern sans-serif font stack */
   font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
   color: #334155;
+}
+
+/* PREVIEW MODE POPUP */
+.quotation-body.preview-mode {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  background-color: rgba(15, 23, 42, 0.9);
+  overflow-y: auto;
+  padding: 40px 0;
+  margin: 0;
 }
 
 .action-bar {
@@ -18,8 +31,18 @@
   margin-bottom: 20px;
 }
 
+.preview-mode .action-bar {
+  background: white;
+  padding: 15px 25px;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+
 .btn {
-  background: #1e293b; /* Corporate Slate */
+  background: #9f8170;
   color: white;
   border: none;
   padding: 10px 20px;
@@ -33,12 +56,21 @@
   background: #334155;
 }
 
+.btn-back {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+.btn-back:hover {
+  background: #e2e8f0;
+}
+
 /* --- THE A4 PAGE --- */
 .a4-page {
   width: 210mm;
-  height: 296mm;
+  height: 296.5mm;
   background: white;
-  padding: 15mm 20mm; /* Slightly wider margins for a breathable layout */
+  padding: 15mm 20mm;
   box-sizing: border-box;
   margin-bottom: 30px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
@@ -47,7 +79,11 @@
   position: relative;
 }
 
-/* ✅ FIX: Moved outside of @media print so html2canvas sees it correctly */
+.preview-mode .a4-page {
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .a4-page:last-child {
   margin-bottom: 0;
 }
@@ -61,7 +97,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  border-bottom: 2px solid #1e293b;
+  border-bottom: 2px solid #9f8170;
   padding-bottom: 20px;
   margin-bottom: 20px;
 }
@@ -111,7 +147,6 @@
   color: #64748b;
 }
 
-/* Header Meta Box */
 .header-meta {
   text-align: right;
   min-width: 220px;
@@ -120,7 +155,7 @@
   font-size: 24px;
   font-weight: 800;
   margin: 0 0 10px 0;
-  color: #1e293b;
+  color: #9f8170;
   letter-spacing: 2px;
 }
 .quote-meta-box {
@@ -153,10 +188,9 @@
   font-weight: 500;
 }
 
-/* --- Bill To Section --- */
 .bill-to-section {
   background: #f8fafc;
-  border-left: 3px solid #1e293b;
+  border-left: 3px solid #9f8170;
   padding: 12px 15px;
   margin-bottom: 20px;
   border-radius: 0 4px 4px 0;
@@ -186,7 +220,6 @@
   color: #0f172a;
 }
 
-/* --- Data Table --- */
 .table-wrapper {
   flex: 1;
   margin-bottom: 20px;
@@ -197,7 +230,7 @@
   font-size: 11px;
 }
 .data-table th {
-  background: #1e293b;
+  background: #9f8170;
   color: #ffffff;
   padding: 10px 8px;
   text-align: left;
@@ -210,13 +243,11 @@
   border-bottom: 1px solid #e2e8f0;
   vertical-align: top;
   color: #334155;
-  /* Prevent row contents from breaking across pages if the table overflows */
   page-break-inside: avoid;
 }
 .data-table tr:last-child td {
   border-bottom: 2px solid #e2e8f0;
 }
-
 .data-table .right {
   text-align: right;
 }
@@ -234,18 +265,15 @@
   line-height: 1.5;
 }
 
-/* --- Footer Area --- */
 .footer-wrapper {
   margin-top: auto;
 }
-
 .summary-split {
   display: flex;
   justify-content: space-between;
   gap: 20px;
   margin-bottom: 30px;
 }
-
 .terms-left {
   flex: 1;
   background: #f8fafc;
@@ -257,7 +285,7 @@
   margin: 0 0 10px 0;
   font-size: 11px;
   font-weight: 700;
-  color: #1e293b;
+  color: #9f8170;
   text-transform: uppercase;
 }
 .terms-left ul {
@@ -293,7 +321,7 @@
   border-bottom: none;
 }
 .t-row.total {
-  border-top: 2px solid #1e293b;
+  border-top: 2px solid #9f8170;
   font-weight: 700;
   font-size: 14px;
   color: #0f172a;
@@ -301,7 +329,6 @@
   margin-top: 5px;
 }
 
-/* Signatures & Brands */
 .auth-signature {
   text-align: right;
   margin-bottom: 25px;
@@ -346,7 +373,6 @@
   object-fit: contain;
 }
 
-/* Spacer for continued pages */
 .continued-text {
   font-size: 10px;
   text-align: right;
@@ -355,22 +381,56 @@
   color: #94a3b8;
 }
 
-/* --- PRINT RULES --- */
+/* =========================================================================
+   ✅ THE PRINT MAGIC: Hide EVERYTHING in the app except the quotation!
+   ========================================================================= */
 @media print {
-  .quotation-body {
-    padding: 0;
-    background: white;
+  @page {
+    size: A4 portrait;
+    margin: 0mm !important;
   }
+
+  /* 1. Turn the entire application invisible */
+  body * {
+    visibility: hidden;
+  }
+
+  /* 2. Turn ONLY the quotation wrapper and its children visible again */
+  #quotation-container-full,
+  #quotation-container-full * {
+    visibility: visible;
+  }
+
+  /* 3. Move the quotation to the absolute top-left corner so sidebars don't push it */
+  #quotation-container-full {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+
+  /* 4. Ensure buttons stay hidden */
   .action-bar {
-    display: none;
+    display: none !important;
   }
+
+  /* 5. Force exact A4 Page formatting without borders */
   .a4-page {
-    margin: 0;
-    box-shadow: none;
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
     page-break-after: always;
+    page-break-inside: avoid;
   }
-  /* The extra margin-bottom: 0 here is redundant now but harmless */
+
   .a4-page:last-child {
     page-break-after: auto;
+  }
+
+  /* ✅ Preserve ALL colors on print/download */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
 }

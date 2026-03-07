@@ -11,10 +11,15 @@ import {
   Plus,
   Trash2,
   FileText,
+  Eye,
+  Calendar,
 } from "lucide-react";
 import styles from "./CreateQuotation.module.css";
 
-// Shared cache to prevent reloading 41k items if you navigate away and back
+// ✅ Import the Preview Component
+import QuotationPreview from "./QuotationPreview";
+
+// Shared cache to prevent reloading 41k items
 let globalItemsCache = null;
 
 export default function CreateQuotation() {
@@ -51,6 +56,10 @@ export default function CreateQuotation() {
   );
 
   const [originalCreatorId, setOriginalCreatorId] = useState(null);
+
+  // ✅ States for Preview Logic
+  const [currentRevisionNo, setCurrentRevisionNo] = useState(0);
+  const [previewDraftData, setPreviewDraftData] = useState(null);
 
   const [items, setItems] = useState([
     {
@@ -94,11 +103,14 @@ export default function CreateQuotation() {
         if (quote.notes) setNotes(quote.notes);
 
         setOriginalCreatorId(quote.created_by);
+        setCurrentRevisionNo(quote.revision_no || 0);
 
+        // ✅ FIXED: Added .order("id", { ascending: true }) to prevent row randomization
         const { data: qItems, error: iError } = await supabase
           .from("quotation_items")
           .select("*")
-          .eq("quotation_id", quoteId);
+          .eq("quotation_id", quoteId)
+          .order("id", { ascending: true });
 
         if (iError) throw iError;
         if (qItems) setItems(qItems.map((i) => ({ ...i })));
@@ -231,7 +243,7 @@ export default function CreateQuotation() {
             JSON.stringify(cleanedItems),
           );
         } catch {
-          // Silently ignore localStorage quota errors
+          // Ignore storage quota limits
         }
       } catch (err) {
         console.error("Background fetch failed", err);
@@ -253,58 +265,64 @@ export default function CreateQuotation() {
     () => items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
     [items],
   );
-  const taxAmount = useMemo(() => subTotal * 0.18, [subTotal]);
-  const grandTotal = useMemo(() => subTotal + taxAmount, [subTotal, taxAmount]);
 
-  function updateItem(index, field, value) {
-    const updated = [...items];
-    updated[index][field] = value;
-    const safeValue = value ? String(value).trim().toLowerCase() : "";
+  // ✅ PREVIEW LOGIC
+  function handleTriggerPreview() {
+    if (!companyId) return alert("Please select a company");
+    if (!signatoryId) return alert("Please select an Authorised Signatory.");
+    if (isLoadingItems)
+      return alert("Please wait for items to load completely.");
 
-    // SMART UPDATE: Checks BOTH code and name instantly
-    if (field === "item_code" && safeValue) {
-      const matched = itemsMaster.find(
-        (m) =>
-          (m.item_code && m.item_code.toLowerCase() === safeValue) ||
-          (m.item_name && m.item_name.toLowerCase() === safeValue),
-      );
-      if (matched) {
-        updated[index].item_code = matched.item_code || "";
-        updated[index].description = matched.item_name || "";
-        updated[index].rate = matched.rate || 0;
-      }
+    const selectedComp = companies.find((c) => c.id === companyId);
+    let cgst = 0,
+      sgst = 0,
+      igst = 0;
+    if (selectedComp?.gst_type === "INTER") {
+      igst = (subTotal * 18) / 100;
+    } else {
+      cgst = (subTotal * 9) / 100;
+      sgst = (subTotal * 9) / 100;
     }
+    const finalTotal = subTotal + cgst + sgst + igst;
 
-    if (field === "description" && safeValue) {
-      const matched = itemsMaster.find(
-        (m) =>
-          (m.item_name && m.item_name.toLowerCase() === safeValue) ||
-          (m.item_code && m.item_code.toLowerCase() === safeValue),
-      );
-      if (matched) {
-        updated[index].item_code = matched.item_code || "";
-        updated[index].description = matched.item_name || "";
-        updated[index].rate = matched.rate || 0;
-      }
-    }
+    const draft = {
+      quotation: {
+        quotation_number: quoteNo,
+        quotation_date: quotationDate,
+        company_id: companyId,
+        attn_person_name: attn,
+        authorised_signatory_id: signatoryId,
+        valid_for: validFor,
+        delivery_time: deliveryTime,
+        payment_terms: paymentTerms,
+        mode_of_enquiry: modeOfEnquiry,
+        subtotal: subTotal,
+        cgst_amount: cgst,
+        sgst_amount: sgst,
+        igst_amount: igst,
+        total_amount: finalTotal,
+        notes: notes,
+        revision_no: isReviseMode ? currentRevisionNo + 1 : currentRevisionNo,
+      },
+      items: items.filter(
+        (item) => item.description && item.description.trim() !== "",
+      ),
+    };
 
-    const qty = Number(updated[index].quantity) || 0;
-    const rate = Number(updated[index].rate) || 0;
-    const disc = Number(updated[index].discount) || 0;
-    updated[index].amount = qty * rate - (qty * rate * disc) / 100;
-    setItems(updated);
+    setPreviewDraftData(draft); // Opens the modal
   }
 
-  async function saveQuotation() {
-    if (!companyId) return alert("Select a company");
-    if (!signatoryId) return alert("Please select an Authorised Signatory.");
+  // ✅ THIS ONLY RUNS ON CONFIRM IN THE PREVIEW
+  async function executeRealSave() {
+    setPreviewDraftData(null);
+    setSaving(true);
 
     if (isReviseMode && userRole !== "ADMIN") {
       alert("Permission Denied: Only Admins can create revisions.");
+      setSaving(false);
       return;
     }
 
-    setSaving(true);
     try {
       const {
         data: { user },
@@ -395,16 +413,21 @@ export default function CreateQuotation() {
         finalId = newQ.id;
       }
 
-      const itemRows = items.map((item) => ({
-        quotation_id: finalId,
-        item_code: item.item_code,
-        description: item.description,
-        quantity: item.quantity,
-        rate: item.rate,
-        discount: item.discount,
-        amount: item.amount,
-      }));
-      await supabase.from("quotation_items").insert(itemRows);
+      const itemRows = items
+        .filter((i) => i.description.trim() !== "")
+        .map((item) => ({
+          quotation_id: finalId,
+          item_code: item.item_code,
+          description: item.description,
+          quantity: item.quantity,
+          rate: item.rate,
+          discount: item.discount,
+          amount: item.amount,
+        }));
+
+      if (itemRows.length > 0) {
+        await supabase.from("quotation_items").insert(itemRows);
+      }
 
       navigate(`/admin/quotations/${finalId}`);
     } catch (err) {
@@ -412,6 +435,65 @@ export default function CreateQuotation() {
     } finally {
       setSaving(false);
     }
+  }
+
+  const taxAmount = useMemo(() => subTotal * 0.18, [subTotal]);
+  const grandTotal = useMemo(() => subTotal + taxAmount, [subTotal, taxAmount]);
+
+  function updateItem(index, field, value) {
+    const updated = [...items];
+    updated[index][field] = value;
+    const safeValue = value ? String(value).trim().toLowerCase() : "";
+
+    if (field === "item_code" && safeValue) {
+      const matched = itemsMaster.find(
+        (m) =>
+          (m.item_code && m.item_code.toLowerCase() === safeValue) ||
+          (m.item_name && m.item_name.toLowerCase() === safeValue),
+      );
+      if (matched) {
+        updated[index].item_code = matched.item_code || "";
+        updated[index].description = matched.item_name || "";
+        updated[index].rate = matched.rate || 0;
+      }
+    }
+
+    if (field === "description" && safeValue) {
+      const matched = itemsMaster.find(
+        (m) =>
+          (m.item_name && m.item_name.toLowerCase() === safeValue) ||
+          (m.item_code && m.item_code.toLowerCase() === safeValue),
+      );
+      if (matched) {
+        updated[index].item_code = matched.item_code || "";
+        updated[index].description = matched.item_name || "";
+        updated[index].rate = matched.rate || 0;
+      }
+    }
+
+    const qty = Number(updated[index].quantity) || 0;
+    const rate = Number(updated[index].rate) || 0;
+    const disc = Number(updated[index].discount) || 0;
+    updated[index].amount = Math.max(qty * rate - (qty * rate * disc) / 100, 0);
+    setItems(updated);
+  }
+
+  function addItemRow() {
+    setItems([
+      ...items,
+      {
+        description: "",
+        item_code: "",
+        quantity: null,
+        rate: null,
+        discount: null,
+        amount: 0,
+      },
+    ]);
+  }
+
+  function removeItemRow(index) {
+    if (items.length > 1) setItems(items.filter((_, i) => i !== index));
   }
 
   return (
@@ -430,6 +512,7 @@ export default function CreateQuotation() {
               color: isLoadingItems ? "#d97706" : "#16a34a",
               fontWeight: "bold",
               fontSize: "13px",
+              marginTop: "4px",
               display: "flex",
               alignItems: "center",
               gap: "6px",
@@ -446,20 +529,34 @@ export default function CreateQuotation() {
           </span>
         </div>
 
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div
+          className={styles.actions}
+          style={{ display: "flex", gap: "10px", alignItems: "center" }}
+        >
           <button
             onClick={() => navigate("/admin/quotations")}
-            className={styles.cancelBtn}
+            className={styles.backBtn}
           >
             Cancel
           </button>
           <button
-            onClick={saveQuotation}
+            onClick={handleTriggerPreview}
             disabled={saving || isLoadingItems}
             className={styles.saveBtn}
+            style={{
+              opacity: saving || isLoadingItems ? 0.5 : 1,
+              cursor: saving || isLoadingItems ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
           >
-            {saving ? <Loader2 className="spin-anim" /> : <Save size={18} />}
-            {isEditMode ? "Update Changes" : "Save"}
+            {saving ? (
+              <Loader2 className="spin-anim" size={18} />
+            ) : (
+              <Eye size={18} />
+            )}
+            Preview Quotation
           </button>
         </div>
       </div>
@@ -492,7 +589,22 @@ export default function CreateQuotation() {
             className={styles.input}
           />
           {showCompanyDropdown && (
-            <div className={styles.dropdownMenu}>
+            <div
+              className={styles.dropdownMenu}
+              style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                right: 0,
+                backgroundColor: "#fff",
+                border: "1px solid #d1d5db",
+                borderTop: "none",
+                borderRadius: "0 0 8px 8px",
+                maxHeight: "200px",
+                overflowY: "auto",
+                zIndex: 10,
+              }}
+            >
               {companies
                 .filter((c) =>
                   c.company_name
@@ -508,6 +620,17 @@ export default function CreateQuotation() {
                       setShowCompanyDropdown(false);
                     }}
                     className={styles.dropdownItem}
+                    style={{
+                      padding: "10px 12px",
+                      cursor: "pointer",
+                      borderBottom: "1px solid #f3f4f6",
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.backgroundColor = "#f9fafb")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.backgroundColor = "#fff")
+                    }
                   >
                     {comp.company_name}
                   </div>
@@ -524,6 +647,7 @@ export default function CreateQuotation() {
             value={attn}
             onChange={(e) => setAttn(e.target.value)}
             className={styles.input}
+            placeholder="e.g. Mr. John Doe"
           />
         </div>
 
@@ -572,7 +696,9 @@ export default function CreateQuotation() {
           />
         </div>
         <div className={styles.fieldGroup}>
-          <label className={styles.label}>Date</label>
+          <label className={styles.label}>
+            <Calendar size={14} /> Date
+          </label>
           <input
             type="date"
             value={quotationDate}
@@ -585,10 +711,11 @@ export default function CreateQuotation() {
       <div className={styles.fieldGroup} style={{ marginBottom: "24px" }}>
         <label className={styles.label}>Mode of Enquiry</label>
         <input
+          type="text"
+          placeholder="e.g., Email, Phone, Walk-in..."
           value={modeOfEnquiry}
           onChange={(e) => setModeOfEnquiry(e.target.value)}
           className={styles.input}
-          placeholder="e.g. Direct Visit"
         />
       </div>
 
@@ -596,18 +723,17 @@ export default function CreateQuotation() {
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Code</th>
-              <th>Description</th>
-              <th>Qty</th>
-              <th>Rate</th>
-              <th>Disc%</th>
-              <th>Total</th>
-              <th></th>
+              <th style={{ width: "20%" }}>Code</th>
+              <th style={{ width: "35%" }}>Description</th>
+              <th style={{ width: "10%" }}>Qty</th>
+              <th style={{ width: "15%" }}>Rate</th>
+              <th style={{ width: "10%" }}>Disc%</th>
+              <th style={{ width: "15%" }}>Amount</th>
+              <th style={{ width: "5%" }}></th>
             </tr>
           </thead>
           <tbody>
             {items.map((item, idx) => {
-              // ✅ CROSS-FILTER THE ENTIRE 41K DB *BEFORE* SLICING
               const searchCode = item.item_code
                 ? item.item_code.toLowerCase()
                 : "";
@@ -643,6 +769,8 @@ export default function CreateQuotation() {
                   <td>
                     <input
                       list={`codes-${idx}`}
+                      type="text"
+                      placeholder="Code"
                       value={item.item_code || ""}
                       onChange={(e) =>
                         updateItem(idx, "item_code", e.target.value)
@@ -652,7 +780,10 @@ export default function CreateQuotation() {
                     />
                     <datalist id={`codes-${idx}`}>
                       {matchingCodes.map((m) => (
-                        <option key={m.id} value={m.item_code || m.item_name}>
+                        <option
+                          key={`code-${m.id}`}
+                          value={m.item_code || m.item_name}
+                        >
                           {m.item_name || ""}
                         </option>
                       ))}
@@ -661,6 +792,7 @@ export default function CreateQuotation() {
                   <td>
                     <input
                       list={`desc-${idx}`}
+                      placeholder="Type item name"
                       value={item.description || ""}
                       onChange={(e) =>
                         updateItem(idx, "description", e.target.value)
@@ -670,7 +802,10 @@ export default function CreateQuotation() {
                     />
                     <datalist id={`desc-${idx}`}>
                       {matchingDesc.map((m) => (
-                        <option key={m.id} value={m.item_name || m.item_code}>
+                        <option
+                          key={`desc-${m.id}`}
+                          value={m.item_name || m.item_code}
+                        >
                           {m.item_code || ""}
                         </option>
                       ))}
@@ -679,6 +814,7 @@ export default function CreateQuotation() {
                   <td>
                     <input
                       type="number"
+                      min="1"
                       value={item.quantity ?? ""}
                       onChange={(e) =>
                         updateItem(idx, "quantity", e.target.value)
@@ -689,6 +825,7 @@ export default function CreateQuotation() {
                   <td>
                     <input
                       type="number"
+                      min="0"
                       value={item.rate ?? ""}
                       onChange={(e) => updateItem(idx, "rate", e.target.value)}
                       className={styles.tableInput}
@@ -697,6 +834,8 @@ export default function CreateQuotation() {
                   <td>
                     <input
                       type="number"
+                      min="0"
+                      max="100"
                       value={item.discount ?? ""}
                       onChange={(e) =>
                         updateItem(idx, "discount", e.target.value)
@@ -704,21 +843,18 @@ export default function CreateQuotation() {
                       className={styles.tableInput}
                     />
                   </td>
-                  <td style={{ fontWeight: "600" }}>
-                    ₹
-                    {item.amount.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                    })}
+                  <td style={{ fontWeight: 600, padding: "10px" }}>
+                    ₹ {item.amount.toFixed(2)}
                   </td>
                   <td>
-                    <button
-                      onClick={() =>
-                        setItems(items.filter((_, i) => i !== idx))
-                      }
-                      className={styles.deleteBtn}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    {items.length > 1 && (
+                      <button
+                        onClick={() => removeItemRow(idx)}
+                        className={styles.deleteBtn}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               );
@@ -727,27 +863,15 @@ export default function CreateQuotation() {
         </table>
       </div>
 
-      <button
-        onClick={() =>
-          setItems([
-            ...items,
-            {
-              description: "",
-              item_code: "",
-              quantity: null,
-              rate: null,
-              discount: null,
-              amount: 0,
-            },
-          ])
-        }
-        className={styles.addItemBtn}
-      >
+      <button onClick={addItemRow} className={styles.addItemBtn}>
         <Plus size={18} /> Add Row
       </button>
 
       <div style={{ marginTop: "20px" }}>
-        <label className={styles.label}>
+        <label
+          className={styles.label}
+          style={{ display: "flex", alignItems: "center", gap: "5px" }}
+        >
           <FileText size={14} /> Notes / Declaration
         </label>
         <textarea
@@ -764,16 +888,14 @@ export default function CreateQuotation() {
           <div className={styles.totalRow}>
             <span>Subtotal</span>
             <span>
-              ₹
-              {subTotal.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-              })}
+              ₹{" "}
+              {subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </span>
           </div>
           <div className={styles.totalRow}>
             <span>Tax (18%)</span>
             <span>
-              ₹
+              ₹{" "}
               {taxAmount.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
               })}
@@ -782,7 +904,7 @@ export default function CreateQuotation() {
           <div className={styles.grandTotal}>
             <span>Grand Total</span>
             <span>
-              ₹
+              ₹{" "}
               {grandTotal.toLocaleString(undefined, {
                 minimumFractionDigits: 2,
               })}
@@ -790,6 +912,14 @@ export default function CreateQuotation() {
           </div>
         </div>
       </div>
+
+      {previewDraftData && (
+        <QuotationPreview
+          draftData={previewDraftData}
+          onCancelPreview={() => setPreviewDraftData(null)}
+          onConfirmSave={executeRealSave}
+        />
+      )}
     </div>
   );
 }

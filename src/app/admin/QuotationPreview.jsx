@@ -1,15 +1,20 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
-import html2pdf from "html2pdf.js";
 import "./QuotationPreview.css";
 
-// ✅ SAFE ITEM COUNT (Fits on Page 1 with Header + Bill To + Footer)
 const ITEMS_PER_PAGE = 15;
 
-export default function QuotationPreview() {
+export default function QuotationPreview({
+  draftData,
+  onConfirmSave,
+  onCancelPreview,
+}) {
   const { id } = useParams();
   const navigate = useNavigate();
+
+  // Detect if we are previewing before saving
+  const isPreviewMode = Boolean(draftData);
 
   const [quotation, setQuotation] = useState(null);
   const [items, setItems] = useState([]);
@@ -19,40 +24,9 @@ export default function QuotationPreview() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!id) return;
     async function loadData() {
       try {
         setLoading(true);
-        const { data: q, error: qErr } = await supabase
-          .from("quotations")
-          .select("*")
-          .eq("id", id)
-          .single();
-        if (qErr) throw qErr;
-        setQuotation(q);
-
-        const { data: c } = await supabase
-          .from("companies")
-          .select("*")
-          .eq("id", q.company_id)
-          .single();
-        setCompany(c);
-
-        if (q.authorised_signatory_id) {
-          const { data: emp } = await supabase
-            .from("employees")
-            .select("*")
-            .eq("id", q.authorised_signatory_id)
-            .single();
-          setSignatory(emp);
-        }
-
-        const { data: qi } = await supabase
-          .from("quotation_items")
-          .select("*")
-          .eq("quotation_id", id)
-          .order("id");
-        setItems(qi || []);
 
         const { data: s } = await supabase
           .from("system_settings")
@@ -66,6 +40,59 @@ export default function QuotationPreview() {
             email: "Email Address",
           },
         );
+
+        if (isPreviewMode) {
+          setQuotation(draftData.quotation);
+          setItems(draftData.items);
+
+          const { data: c } = await supabase
+            .from("companies")
+            .select("*")
+            .eq("id", draftData.quotation.company_id)
+            .single();
+          setCompany(c);
+
+          if (draftData.quotation.authorised_signatory_id) {
+            const { data: emp } = await supabase
+              .from("employees")
+              .select("*")
+              .eq("id", draftData.quotation.authorised_signatory_id)
+              .single();
+            setSignatory(emp);
+          }
+        } else if (id) {
+          const { data: q, error: qErr } = await supabase
+            .from("quotations")
+            .select("*")
+            .eq("id", id)
+            .single();
+          if (qErr) throw qErr;
+          setQuotation(q);
+
+          const { data: c } = await supabase
+            .from("companies")
+            .select("*")
+            .eq("id", q.company_id)
+            .single();
+          setCompany(c);
+
+          if (q.authorised_signatory_id) {
+            const { data: emp } = await supabase
+              .from("employees")
+              .select("*")
+              .eq("id", q.authorised_signatory_id)
+              .single();
+            setSignatory(emp);
+          }
+
+          // ✅ Guaranteed correct item order
+          const { data: qi } = await supabase
+            .from("quotation_items")
+            .select("*")
+            .eq("quotation_id", id)
+            .order("id", { ascending: true });
+          setItems(qi || []);
+        }
       } catch (err) {
         console.error(err);
         alert("Error loading data");
@@ -74,7 +101,7 @@ export default function QuotationPreview() {
       }
     }
     loadData();
-  }, [id]);
+  }, [id, draftData, isPreviewMode]);
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat("en-IN", {
@@ -84,7 +111,6 @@ export default function QuotationPreview() {
     }).format(amount || 0);
   };
 
-  // ✅ SPLIT ITEMS INTO PAGES
   const pages = useMemo(() => {
     if (!items || items.length === 0) return [];
     const chunks = [];
@@ -94,63 +120,19 @@ export default function QuotationPreview() {
     return chunks;
   }, [items]);
 
-  // ✅ BULLETPROOF PDF GENERATION
+  // ✅ PERFECT NATIVE PRINT (COPYABLE TEXT)
   function downloadPDF() {
-    const element = document.getElementById("quotation-container-full");
-    const pagesList = element.querySelectorAll(".a4-page");
-
-    // 1. Forcefully strip web margins, shadows, and lock height to prevent fractional pixel overflow
-    pagesList.forEach((p) => {
-      p.style.marginBottom = "0px";
-      p.style.boxShadow = "none";
-      p.style.border = "none";
-      p.style.height = "296.5mm"; // Slightly under 297mm to guarantee it fits exactly on 1 page
-      p.style.overflow = "hidden";
-      p.style.pageBreakAfter = "always";
-      p.style.pageBreakInside = "avoid";
-    });
-
-    // Remove the page break from the absolute last item so it doesn't push a blank page
-    if (pagesList.length > 0) {
-      pagesList[pagesList.length - 1].style.pageBreakAfter = "auto";
-    }
-
-    // 2. Wait 150ms for the browser to visually update the screen before snapping the picture
-    setTimeout(() => {
-      const options = {
-        margin: 0,
-        filename: `${quotation?.quotation_number || "Quote"}.pdf`,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, scrollY: 0 },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["css", "legacy"] },
-      };
-
-      html2pdf()
-        .set(options)
-        .from(element)
-        .save()
-        .then(() => {
-          // 3. RESTORE the web layout back to normal after downloading
-          pagesList.forEach((p) => {
-            p.style.marginBottom = "";
-            p.style.boxShadow = "";
-            p.style.border = "";
-            p.style.height = "297mm";
-            p.style.overflow = "";
-            p.style.pageBreakAfter = "";
-            p.style.pageBreakInside = "";
-          });
-        });
-    }, 150);
+    const originalTitle = document.title;
+    document.title = `${quotation?.quotation_number || "Quotation"}`;
+    window.print();
+    document.title = originalTitle;
   }
 
-  // ✅ SMART BACK NAVIGATION
   function handleGoBack() {
     if (window.location.pathname.includes("/user/")) {
-      navigate("/user/quotations"); // Redirects Users to their list
+      navigate("/user/quotations");
     } else {
-      navigate("/admin/quotations"); // Redirects Admins to their list
+      navigate("/admin/quotations");
     }
   }
 
@@ -158,15 +140,42 @@ export default function QuotationPreview() {
   if (!quotation) return <div className="loading-screen">No Data Found</div>;
 
   return (
-    <div className="quotation-body">
-      <div className="action-bar">
-        {/* ✅ UPDATED BACK BUTTON */}
-        <button className="btn btn-back" onClick={handleGoBack}>
-          ← Back
-        </button>
-        <button className="btn" onClick={downloadPDF}>
-          Download PDF
-        </button>
+    <div className={`quotation-body ${isPreviewMode ? "preview-mode" : ""}`}>
+      <div className="action-bar hide-on-print">
+        {isPreviewMode ? (
+          <>
+            <div style={{ fontWeight: "bold", color: "#B45309" }}>
+              👀 PREVIEW MODE
+            </div>
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                className="btn btn-back"
+                onClick={(e) => {
+                  e.preventDefault();
+                  onCancelPreview();
+                }}
+              >
+                ✎ Go Back & Edit
+              </button>
+              <button
+                className="btn"
+                onClick={onConfirmSave}
+                style={{ backgroundColor: "#10B981" }}
+              >
+                ✓ Confirm & Save
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <button className="btn btn-back" onClick={handleGoBack}>
+              ← Back
+            </button>
+            <button className="btn" onClick={downloadPDF}>
+              Download PDF
+            </button>
+          </>
+        )}
       </div>
 
       <div id="quotation-container-full">
@@ -176,10 +185,8 @@ export default function QuotationPreview() {
 
           return (
             <div className="a4-page" key={pageIndex}>
-              {/* --- HEADER (On Every Page) --- */}
               <header className="page-header">
                 <div className="header-top-grid">
-                  {/* Left: Branding & Company Info */}
                   <div className="header-brand">
                     <div className="logo-box">
                       {settings.company_logo_url ? (
@@ -200,7 +207,6 @@ export default function QuotationPreview() {
                     </div>
                   </div>
 
-                  {/* Right: Document Type & Meta */}
                   <div className="header-meta">
                     <h2 className="doc-title">QUOTATION</h2>
                     {isFirstPage && (
@@ -227,7 +233,6 @@ export default function QuotationPreview() {
                             {quotation.mode_of_enquiry}
                           </span>
                         </div>
-                        {/* ✅ ADDED: Contact Number Row */}
                         <div className="meta-row">
                           <span className="meta-lbl">Contact:</span>
                           <span className="meta-val">
@@ -255,7 +260,6 @@ export default function QuotationPreview() {
                   </div>
                 </div>
 
-                {/* ✅ CONDITIONAL: Bill To ONLY on Page 1 */}
                 {isFirstPage && (
                   <div className="bill-to-section">
                     <div className="bill-to-label">BILL TO</div>
@@ -270,7 +274,6 @@ export default function QuotationPreview() {
                 )}
               </header>
 
-              {/* --- ITEMS TABLE --- */}
               <div className="table-wrapper">
                 <table className="data-table">
                   <thead>
@@ -312,7 +315,6 @@ export default function QuotationPreview() {
                 </table>
               </div>
 
-              {/* --- FOOTER (ONLY LAST PAGE) --- */}
               {isLastPage ? (
                 <div className="footer-wrapper">
                   <div className="summary-split">
@@ -367,7 +369,7 @@ export default function QuotationPreview() {
                   </div>
 
                   <div className="auth-signature">
-                    <div className="for-text">For {settings.company_name}</div>
+                    <div className="for-text">For {settings?.company_name}</div>
                     <div className="sig-gap"></div>
                     <div className="auth-name">
                       {signatory?.full_name || "Authorised Signatory"}

@@ -13,7 +13,6 @@ export default function QuotationPreview({
   const { id } = useParams();
   const navigate = useNavigate();
 
-  // Detect if we are previewing before saving
   const isPreviewMode = Boolean(draftData);
 
   const [quotation, setQuotation] = useState(null);
@@ -22,6 +21,16 @@ export default function QuotationPreview({
   const [settings, setSettings] = useState(null);
   const [signatory, setSignatory] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // Inject Libre Baskerville from Google Fonts
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.href =
+      "https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap";
+    link.rel = "stylesheet";
+    document.head.appendChild(link);
+    return () => document.head.removeChild(link);
+  }, []);
 
   useEffect(() => {
     async function loadData() {
@@ -38,7 +47,7 @@ export default function QuotationPreview({
             address: "Address Line Here",
             phone: "Phone Number",
             email: "Email Address",
-          },
+          }
         );
 
         if (isPreviewMode) {
@@ -120,7 +129,6 @@ export default function QuotationPreview({
     return chunks;
   }, [items]);
 
-  // ✅ PERFECT NATIVE PRINT (COPYABLE TEXT)
   function downloadPDF() {
     const originalTitle = document.title;
     document.title = `${quotation?.quotation_number || "Quotation"}`;
@@ -144,25 +152,28 @@ export default function QuotationPreview({
       <div className="action-bar hide-on-print">
         {isPreviewMode ? (
           <>
-            <div style={{ fontWeight: "bold", color: "#B45309" }}>
-              👀 PREVIEW MODE
+            <div style={{
+              fontWeight: "700",
+              color: "#8C6A3F",
+              fontFamily: "'Libre Baskerville', Georgia, serif",
+              fontSize: "12px",
+              letterSpacing: "0.5px",
+            }}>
+              👁 Preview Mode
             </div>
             <div style={{ display: "flex", gap: "10px" }}>
               <button
                 className="btn btn-back"
-                onClick={(e) => {
-                  e.preventDefault();
-                  onCancelPreview();
-                }}
+                onClick={(e) => { e.preventDefault(); onCancelPreview(); }}
               >
-                ✎ Go Back & Edit
+                ✎ Go Back &amp; Edit
               </button>
               <button
                 className="btn"
                 onClick={onConfirmSave}
-                style={{ backgroundColor: "#10B981" }}
+                style={{ background: "#4A7C59" }}
               >
-                ✓ Confirm & Save
+                ✓ Confirm &amp; Save
               </button>
             </div>
           </>
@@ -185,6 +196,11 @@ export default function QuotationPreview({
 
           return (
             <div className="a4-page" key={pageIndex}>
+              {/* Watermark logo */}
+              <div className="a4-watermark">
+                <img src="/company-logo.png" alt="" />
+              </div>
+
               <header className="page-header">
                 <div className="header-top-grid">
                   <div className="header-brand">
@@ -197,44 +213,36 @@ export default function QuotationPreview({
                     </div>
                     <div className="company-details">
                       <h1 className="company-title">
-                        {settings.company_name ||
-                          "COSMOTECH ENGINEERS & TRADELINES"}
+                        {settings.company_name || "COSMOTECH ENGINEERS & TRADELINES"}
                       </h1>
                       <p>{settings.company_address || "Address Line Here"}</p>
-                      <p>
-                        Phone: {settings.phone} | Email: {settings.email}
-                      </p>
+                      <p>Phone: {settings.phone} | Email: {settings.email}</p>
                     </div>
                   </div>
 
                   <div className="header-meta">
-                    <h2 className="doc-title">QUOTATION</h2>
+                    <h2 className="doc-title">Quotation</h2>
                     {isFirstPage && (
                       <div className="quote-meta-box">
                         <div className="meta-row">
-                          <span className="meta-lbl">Quote No:</span>
+                          <span className="meta-lbl">Quote No</span>
                           <span className="meta-val bold">
                             {quotation.quotation_number}
-                            {quotation.revision_no > 0 &&
-                              ` (Rev-${quotation.revision_no})`}
+                            {quotation.revision_no > 0 && ` (Rev-${quotation.revision_no})`}
                           </span>
                         </div>
                         <div className="meta-row">
-                          <span className="meta-lbl">Date:</span>
+                          <span className="meta-lbl">Date</span>
                           <span className="meta-val">
-                            {new Date(
-                              quotation.quotation_date,
-                            ).toLocaleDateString("en-IN")}
+                            {new Date(quotation.quotation_date).toLocaleDateString("en-IN")}
                           </span>
                         </div>
                         <div className="meta-row">
-                          <span className="meta-lbl">Enquiry Mode:</span>
-                          <span className="meta-val">
-                            {quotation.mode_of_enquiry}
-                          </span>
+                          <span className="meta-lbl">Enquiry Mode</span>
+                          <span className="meta-val">{quotation.mode_of_enquiry}</span>
                         </div>
                         <div className="meta-row">
-                          <span className="meta-lbl">Contact:</span>
+                          <span className="meta-lbl">Contact</span>
                           <span className="meta-val">
                             {signatory?.contact_number || "Not Provided"}
                           </span>
@@ -244,16 +252,12 @@ export default function QuotationPreview({
                     {!isFirstPage && (
                       <div className="quote-meta-box minimal">
                         <div className="meta-row">
-                          <span className="meta-lbl">Quote No:</span>
-                          <span className="meta-val">
-                            {quotation.quotation_number}
-                          </span>
+                          <span className="meta-lbl">Quote No</span>
+                          <span className="meta-val">{quotation.quotation_number}</span>
                         </div>
                         <div className="meta-row">
-                          <span className="meta-lbl">Page:</span>
-                          <span className="meta-val">
-                            {pageIndex + 1} of {pages.length}
-                          </span>
+                          <span className="meta-lbl">Page</span>
+                          <span className="meta-val">{pageIndex + 1} of {pages.length}</span>
                         </div>
                       </div>
                     )}
@@ -262,13 +266,11 @@ export default function QuotationPreview({
 
                 {isFirstPage && (
                   <div className="bill-to-section">
-                    <div className="bill-to-label">BILL TO</div>
+                    <div className="bill-to-label">Bill To</div>
                     <div className="client-name">{company?.company_name}</div>
                     <div className="client-addr">{company?.address}</div>
                     {quotation.attn_person_name && (
-                      <div className="client-attn">
-                        Attn: {quotation.attn_person_name}
-                      </div>
+                      <div className="client-attn">Attn: {quotation.attn_person_name}</div>
                     )}
                   </div>
                 )}
@@ -279,20 +281,12 @@ export default function QuotationPreview({
                   <thead>
                     <tr>
                       <th style={{ width: "5%" }}>#</th>
-                      <th style={{ width: "18%" }}>CODE</th>
-                      <th style={{ width: "32%" }}>DESCRIPTION</th>
-                      <th style={{ width: "12%" }} className="right">
-                        RATE
-                      </th>
-                      <th style={{ width: "8%" }} className="center">
-                        QTY
-                      </th>
-                      <th style={{ width: "10%" }} className="center">
-                        DISC%
-                      </th>
-                      <th style={{ width: "15%" }} className="right">
-                        AMOUNT
-                      </th>
+                      <th style={{ width: "18%" }}>Code</th>
+                      <th style={{ width: "32%" }}>Description</th>
+                      <th style={{ width: "12%" }} className="right">Rate</th>
+                      <th style={{ width: "8%" }} className="center">Qty</th>
+                      <th style={{ width: "10%" }} className="center">Disc%</th>
+                      <th style={{ width: "15%" }} className="right">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -303,12 +297,8 @@ export default function QuotationPreview({
                         <td className="desc-cell">{item.description}</td>
                         <td className="right">{formatCurrency(item.rate)}</td>
                         <td className="center">{item.quantity}</td>
-                        <td className="center">
-                          {item.discount > 0 ? item.discount : "-"}
-                        </td>
-                        <td className="right bold">
-                          {formatCurrency(item.amount)}
-                        </td>
+                        <td className="center">{item.discount > 0 ? item.discount : "—"}</td>
+                        <td className="right bold">{formatCurrency(item.amount)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -319,21 +309,14 @@ export default function QuotationPreview({
                 <div className="footer-wrapper">
                   <div className="summary-split">
                     <div className="terms-left">
-                      <h4>PAYMENT & DELIVERY TERMS</h4>
+                      <h4>Payment &amp; Delivery Terms</h4>
                       <ul>
-                        <li>
-                          <strong>Delivery:</strong> {quotation.delivery_time}
-                        </li>
-                        <li>
-                          <strong>Payment:</strong> {quotation.payment_terms}
-                        </li>
-                        <li>
-                          <strong>Validity:</strong> {quotation.valid_for}
-                        </li>
+                        <li><strong>Delivery:</strong> {quotation.delivery_time}</li>
+                        <li><strong>Payment:</strong> {quotation.payment_terms}</li>
+                        <li><strong>Validity:</strong> {quotation.valid_for}</li>
                       </ul>
                       <div className="declaration">
-                        <strong>Notes / Declaration:</strong>
-                        <br />
+                        <strong>Notes / Declaration:</strong><br />
                         {quotation.notes ||
                           "We hope the above quotation meets your requirements. Thank you for being our privileged customer."}
                       </div>
@@ -378,34 +361,18 @@ export default function QuotationPreview({
                   </div>
 
                   <div className="dealers-footer">
-                    <h4>AUTHORIZED DISTRIBUTORS FOR</h4>
+                    <h4>Authorized Distributors For</h4>
                     <div className="logos-line">
-                      <img
-                        src="/logos/brand1.png"
-                        alt=""
-                        onError={(e) => (e.target.style.display = "none")}
-                      />
-                      <img
-                        src="/logos/brand2.png"
-                        alt=""
-                        onError={(e) => (e.target.style.display = "none")}
-                      />
-                      <img
-                        src="/logos/brand3.png"
-                        alt=""
-                        onError={(e) => (e.target.style.display = "none")}
-                      />
-                      <img
-                        src="/logos/brand4.png"
-                        alt=""
-                        onError={(e) => (e.target.style.display = "none")}
-                      />
+                      <img src="/logos/brand1.png" alt="" onError={(e) => (e.target.style.display = "none")} />
+                      <img src="/logos/brand2.png" alt="" onError={(e) => (e.target.style.display = "none")} />
+                      <img src="/logos/brand3.png" alt="" onError={(e) => (e.target.style.display = "none")} />
+                      <img src="/logos/brand4.png" alt="" onError={(e) => (e.target.style.display = "none")} />
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="page-spacer">
-                  <p className="continued-text">Continued on next page...</p>
+                  <p className="continued-text">Continued on next page…</p>
                 </div>
               )}
             </div>
